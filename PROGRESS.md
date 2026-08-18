@@ -120,3 +120,41 @@ Format per entry: date, day number from ROADMAP.md, what I did, what broke, what
   distance of 1.173. Probably near-duplicate chunks produced by the 100-char overlap,
   which would mean duplicates are quietly eating retrieval slots. Not verified.
 - Whether top-k=4 is right, or a distance threshold would be better than a fixed k.
+
+---
+
+### 2026-08-15 — Day 5
+
+**Did:**
+- Investigated the two things flagged as suspicious on Day 3, before starting manual
+  answer verification, so the verification wouldn't be tripping over known bugs.
+- Found the cause of the chunk-count anomaly and fixed it: added `clean_text()` to
+  `ingest.py`, stripping `<latexit>...</latexit>` blocks at load time.
+- Rebuilt the index and re-tested.
+
+**Broke / got stuck on:**
+- Not broken so much as quietly wrong the whole time. `2211.15658v2.pdf` embeds the
+  LaTeX source of every equation as hidden text — invisible when reading the PDF, but
+  pypdf extracts it as long base64 blobs. 94 such blocks, 44% of that document's
+  extracted characters, 57% of its chunks. Roughly a quarter of the entire index was
+  garbage and nothing about the output looked wrong.
+
+**Learned:**
+- Extracted PDF text is not what you see on the page. Tools embed things a reader never
+  sees, and extraction pulls them out along with the real content.
+- The way to find this was measuring rather than reading. Counting duplicate chunk
+  texts and comparing per-file chunk statistics exposed it immediately; spot-checking
+  answers never would have, because answers still looked fine.
+- Cleaning is worth doing at load time, in one place, so every downstream stage
+  benefits and no script can accidentally skip it.
+- Result was measurable: index 392 -> 305 chunks, and retrieval distances on that paper
+  improved from ~0.60 to ~0.42-0.54. Less noise competing for the top-k slots.
+
+**Still don't fully get:**
+- Figure labels (axis text, diagram annotations) are still extracted into chunks. Less
+  severe than the LaTeX problem, but no filter for it yet, and it's harder because it
+  isn't wrapped in a tag that marks it as junk.
+- 14 of 305 chunks are still exact duplicates from the overlap. Left alone for now.
+
+**Next:** write 10-15 real questions about these papers and check, for each one, whether
+the cited source actually contains the answer.

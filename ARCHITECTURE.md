@@ -19,7 +19,8 @@ Update a section whenever you make or change a real design decision. Leave "why"
 
 ## Chunking
 - **Chunk size / overlap used:** 1000 characters, 100 overlap, via
-  `RecursiveCharacterTextSplitter`. Produces 392 chunks across the 4 papers.
+  `RecursiveCharacterTextSplitter`. Produces 305 chunks across the 4 papers
+  (392 before hidden-LaTeX cleaning was added — see Open Questions).
 - **Why:** Compared 200/500/1000/2000 on one paper (`chunk_test.py`) and read the
   actual output rather than copying a number from a tutorial.
   - Too small (200) fragments mid-sentence — sample chunk began "of outputs in the
@@ -106,14 +107,20 @@ Update a section whenever you make or change a real design decision. Leave "why"
 
 ## Open Questions / Things to Revisit
 (running list of "I did this but I'm not sure it's the right way" items)
-- **Figure and table text pollutes chunks.** Diagram labels extracted from figures
+- **Figure and table text pollutes chunks.** (Still open — the `<latexit>` fix below
+  removed the worst of it, but figure *labels* remain.) Diagram labels extracted from figures
   (e.g. `[D6]ConvTranspose(512,512,2,2)` strings from an architecture diagram) end up
   as chunk text. On a test query this noise chunk ranked 2nd, at distance 0.649 vs
   0.609 for the genuinely relevant chunk — close enough to displace a real result.
   No filtering in place yet.
-- **`2211.15658v2.pdf` produces 165 chunks from 15 pages**, vs 43 chunks from 12 pages
-  for the CubiCasa paper — roughly 4x the density. Haven't checked whether that's
-  genuinely denser text or a layout extraction problem.
+- ~~`2211.15658v2.pdf` produces 165 chunks from 15 pages~~ **SOLVED (Day 5).** The
+  paper embeds the LaTeX source of every equation as hidden text
+  (`<latexit sha1_base64="...">...</latexit>`), invisible to a reader but extracted by
+  pypdf. It was 44% of that document's characters and 57% of its chunks. Now stripped
+  in `ingest.clean_text()`; the file dropped from 165 to 78 chunks, the index from 392
+  to 305, and retrieval distances on that paper improved from ~0.60 to ~0.42-0.54.
+- **14 of 305 chunks are still exact duplicates** (~5%), a side effect of the 100-char
+  overlap. Small enough to leave alone for now.
 - **Two-column layout** — only verified that page 1 of one paper extracts in a sensible
   reading order. Body pages not checked.
 - **`langchain-community` is deprecated** (`PyPDFLoader` is moving to a standalone

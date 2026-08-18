@@ -4,6 +4,7 @@ No chunking or embedding yet. The only goal here is to answer one question:
 which of these PDFs give us usable text, and what metadata comes with it?
 """
 
+import re
 from pathlib import Path
 
 from langchain_community.document_loaders import PyPDFLoader
@@ -11,10 +12,26 @@ from langchain_community.document_loaders import PyPDFLoader
 DATA_DIR = Path(__file__).parent / "data"
 
 
+# Some PDFs built with LaTeX figure tools embed the original LaTeX source of every
+# equation as hidden text, wrapped in <latexit ...>...</latexit>. A reader never sees
+# it, but text extraction pulls it out as long base64 blobs. In 2211.15658v2.pdf this
+# accounted for 44% of the extracted characters, and it was ending up in chunks and
+# competing with real content during retrieval.
+LATEXIT_RE = re.compile(r"<latexit.*?</latexit>", re.DOTALL)
+
+
+def clean_text(text: str) -> str:
+    """Strip extraction artefacts that a human reader would never see."""
+    return LATEXIT_RE.sub("", text)
+
+
 def load_pdf(path: Path):
-    """Load one PDF into a list of Documents, one per page."""
+    """Load one PDF into a list of Documents, one per page, with text cleaned."""
     loader = PyPDFLoader(str(path))
-    return loader.load()
+    pages = loader.load()
+    for page in pages:
+        page.page_content = clean_text(page.page_content)
+    return pages
 
 
 def count_blank_pages(pages) -> int:
