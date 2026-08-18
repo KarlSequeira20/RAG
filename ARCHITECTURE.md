@@ -1,0 +1,120 @@
+# Architecture Notes
+
+Running notes on how the system is built and *why* — not a polished doc, just capturing decisions as I make them so I'm not trying to remember my own reasoning in Week 3 when I write the real README.
+
+Update a section whenever you make or change a real design decision. Leave "why" blank until you actually understand it — don't fill it in with a guess.
+
+---
+
+## Document Set
+- **What:** 4 research papers on floor plan / building layout analysis, in `data/`:
+  - `1904.01920v1.pdf` — CubiCasa5K: A Dataset and an Improved Multi-Task Model for Floorplan Image Analysis (12 pages)
+  - `2105.07147v2.pdf` (18 pages)
+  - `2211.15658v2.pdf` (15 pages)
+  - `ijgi-10-00828-v2.pdf` — ISPRS Int. J. Geo-Information (15 pages)
+  - 60 pages total.
+- **Why this choice:** Same domain as the floor-plan/CV project planned next, so the
+  reading isn't throwaway. All four are born-digital (LaTeX/publisher-generated), not
+  scans, so text extraction works without OCR — verified, 0 blank pages out of 60.
+
+## Chunking
+- **Chunk size / overlap used:** 1000 characters, 100 overlap, via
+  `RecursiveCharacterTextSplitter`. Produces 392 chunks across the 4 papers.
+- **Why:** Compared 200/500/1000/2000 on one paper (`chunk_test.py`) and read the
+  actual output rather than copying a number from a tutorial.
+  - Too small (200) fragments mid-sentence — sample chunk began "of outputs in the
+    very latest block", with no subject. Retrievable but useless to the LLM.
+  - Too big dilutes the embedding: one vector covering several topics matches
+    everything vaguely and nothing precisely, and wastes LLM context.
+  - 1000 is large enough to hold one complete idea, small enough to stay on topic.
+    100 overlap (10%) means a thought split across a boundary still appears whole
+    in one of the two chunks.
+  - Note: the splitter treats `chunk_size` as a ceiling, not a target — it breaks on
+    paragraphs, then lines, then sentences. Average chunk came out at 834 chars.
+    It also never merges across pages, which is what keeps page metadata accurate.
+- **Not yet tuned.** Day 13 evaluation is where these numbers should be tested with
+  real retrieval scores instead of judgement.
+
+## Embeddings
+- **Model used:** `nomic-embed-text` via Ollama, 768 dimensions.
+- **Why:** Runs locally, no API key, no per-call cost. Ollama is already the plan for
+  the LLM on Day 3, so the whole stack stays on one runtime. Better quality than
+  Chroma's bundled default (`all-MiniLM-L6-v2`), at the cost of a 274MB pull.
+  Swapping the embedding model means re-running `build_index.py` from scratch —
+  query embeddings and stored embeddings must come from the same model, or
+  similarity search is meaningless.
+
+## Vector Store
+- **Using:** Chroma (`PersistentClient`, on-disk at `chroma_db/`)
+- **Why Chroma (vs alternatives):** Runs in-process with no server to operate, and
+  persists to a local folder, so there's nothing to deploy alongside the app. Fine at
+  this scale (hundreds of chunks). Pinecone/Weaviate solve problems — millions of
+  vectors, multi-user scale — that this project doesn't have.
+- `chroma_db/` is gitignored: it's fully rebuildable from the PDFs by re-running
+  `build_index.py`.
+
+## Retrieval
+- **Top-k value used:** 4
+- **Why:** Enough that an answer needing facts from two different pages can still be
+  assembled, without padding the prompt with mostly-irrelevant text. Not tuned yet —
+  Day 13 evaluation should test this properly.
+- **Observed:** distances for a well-covered question run ~0.60-0.68. For a question
+  the papers don't address at all ("What is the capital of France?") they jumped to
+  ~1.12-1.17. Chroma always returns k results regardless — it has no notion of "no
+  match" — but that distance gap is a usable signal. A threshold around 1.0 could skip
+  the LLM call entirely for out-of-scope questions.
+
+## LLM
+- **Model used (Ollama model name, or swapped to API):** `llama3.1:8b` via Ollama (4.9 GB)
+- **Why:** Runs locally alongside the embedding model, so no API key and no per-query
+  cost while iterating. 8B is small enough to respond quickly on this machine and has
+  proved able to follow the grounding instructions reliably.
+- **Grounding approach:** the system prompt restricts the model to the numbered sources
+  supplied in the user message, forbids outside knowledge, requires citing source
+  numbers, and gives an explicit refusal string for questions the sources don't cover.
+  The escape hatch matters — without a sanctioned way to decline, a model will strain
+  to answer from training data instead.
+- **Verified:** asked "What is the capital of France?" — a fact the model certainly
+  knows — and it correctly answered "That isn't covered in these documents." Grounding
+  is holding, not just appearing to.
+
+## Source Citation
+- **How citations are tracked (page/chunk metadata approach):** Not built yet (Day 5-7).
+  `PyPDFLoader` already attaches per-page metadata we can carry through:
+  `source` (full file path), `page` (0-indexed int), `page_label` (printed page number,
+  as a string), `total_pages`.
+- **Known issues (e.g. hallucinated citations, mismatches):**
+  - `page` and `page_label` differ by one. Page one of a PDF is `page: 0` /
+    `page_label: '1'`. Mixing them up gives citations that are silently off by one.
+  - `source` is an absolute local path, which will be meaningless once deployed.
+    Needs to become just the filename before Week 3.
+
+## API Layer
+- **Endpoints:**
+- **Error cases handled:**
+
+## Evaluation
+- **Eval set size:**
+- **Metric(s) used:**
+- **Results:**
+
+## Deployment
+- **Platform:**
+- **Known limitations of the deployed version:**
+
+---
+
+## Open Questions / Things to Revisit
+(running list of "I did this but I'm not sure it's the right way" items)
+- **Figure and table text pollutes chunks.** Diagram labels extracted from figures
+  (e.g. `[D6]ConvTranspose(512,512,2,2)` strings from an architecture diagram) end up
+  as chunk text. On a test query this noise chunk ranked 2nd, at distance 0.649 vs
+  0.609 for the genuinely relevant chunk — close enough to displace a real result.
+  No filtering in place yet.
+- **`2211.15658v2.pdf` produces 165 chunks from 15 pages**, vs 43 chunks from 12 pages
+  for the CubiCasa paper — roughly 4x the density. Haven't checked whether that's
+  genuinely denser text or a layout extraction problem.
+- **Two-column layout** — only verified that page 1 of one paper extracts in a sensible
+  reading order. Body pages not checked.
+- **`langchain-community` is deprecated** (`PyPDFLoader` is moving to a standalone
+  package). Works now; should be migrated before deployment.

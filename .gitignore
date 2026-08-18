@@ -1,0 +1,8 @@
+.DS_Store
+.venv/
+__pycache__/
+*.pyc
+.env
+
+# Local vector store — rebuildable from source PDFs, don't commit
+chroma_db/
