@@ -84,6 +84,17 @@ Update a section whenever you make or change a real design decision. Leave "why"
 - **Why:** Runs locally alongside the embedding model, so no API key and no per-query
   cost while iterating. 8B is small enough to respond quickly on this machine and has
   proved able to follow the grounding instructions reliably.
+- **Prompt rules (each added in response to an observed failure):** answer only from the
+  numbered sources; no outside knowledge; an exact refusal string; cite by number;
+  answer only what was asked; own words, no pasted extracts; state a shared fact once;
+  never calculate or infer an unstated number; when sources give conflicting figures,
+  pick the one that answers the question rather than reconciling them.
+  The last two exist because the model invented arithmetic ("2,500 per project times
+  over 100 projects") to reconcile two figures it had been given.
+- **Prompt tuning has hit its limit.** Iterating the prompt improved answer quality
+  (shorter, no pasted quotes, no narrated reasoning, no fabricated arithmetic) but did
+  not change the 12/15 pass rate. Each further change traded one regression for another.
+  The remaining failures look like model capability, not wording.
 - **Grounding approach:** the system prompt restricts the model to the numbered sources
   supplied in the user message, forbids outside knowledge, requires citing source
   numbers, and gives an explicit refusal string for questions the sources don't cover.
@@ -109,9 +120,24 @@ Update a section whenever you make or change a real design decision. Leave "why"
 - **Error cases handled:**
 
 ## Evaluation
-- **Eval set size:**
-- **Metric(s) used:**
-- **Results:**
+- **Eval set size:** 15 questions (`EVAL_QUESTIONS.md`), across five categories: specific
+  numbers, correct-source attribution, multi-chunk synthesis, paraphrased wording, and
+  refusal of questions the documents don't answer.
+- **Metric(s) used:** manual PASS / PARTIAL / FAIL per question, plus retrieval rank of
+  the known-correct chunk when a question fails. `run_eval.py` runs the set; the flags it
+  prints narrow down what to read, they do not decide.
+- **Results (Day 6):** 12 PASS, 2 PARTIAL, 1 FAIL.
+  - PARTIAL — A3: gives the correct "over 15,000" but leads with an unrelated 2,500 from
+    another page. The paper contains both figures in different contexts.
+  - PARTIAL — D12: answers "density image", which is the network's input; the paper's
+    pipeline starts from a 3D point cloud projected into that density map.
+  - FAIL — D13 "Who made FloorPlanCAD?": a metadata question. The affiliation chunk
+    ranks keyword #11 / vector #57, so neither retriever reaches it.
+- **Caveat:** the expected answers were drawn from the extracted text, which is the same
+  text the system reads. Not independent ground truth. Several should be checked against
+  the original PDFs.
+- **Not yet measured:** retrieval precision/recall as numbers rather than per-question
+  verdicts. Day 13.
 
 ## Deployment
 - **Platform:**

@@ -249,3 +249,40 @@ failure.
 
 **Next:** serve metadata-type questions from metadata, and tighten the prompt so answers
 stop dragging in unrelated figures.
+
+---
+
+### 2026-08-15 — Day 7
+
+**Did:**
+- Iterated the system prompt three times, re-running all 15 questions after each change.
+- Kept the version that removed pasted source extracts, narrated reasoning, and invented
+  arithmetic.
+- Updated ARCHITECTURE.md with eval results, and filled in the eval and bug questions in
+  CONCEPTS.md.
+
+**Broke / got stuck on:**
+- Second prompt iteration made the model fabricate a calculation: given "2,500 files" and
+  "over 100 projects" from one page and "over 15,000 floor plans" from another, it
+  multiplied them and presented the result as an answer. Nothing in the paper does that.
+  Fixed with an explicit rule against calculating or inferring unstated numbers.
+
+**Learned:**
+- Prompt changes trade regressions. Telling the model to answer only what was asked made
+  it paste source extracts instead; forbidding extracts made it fabricate arithmetic to
+  reconcile figures. Every rule in the prompt now exists because of a specific observed
+  failure.
+- The pass rate stayed at 12/15 across all three iterations while answer quality improved
+  a lot. A single headline number hides that, which is an argument for keeping the actual
+  answers alongside the score.
+- Knowing when to stop matters. After the third iteration each change fixed one question
+  and broke another, which is the signal that the limit is the model rather than the
+  wording.
+
+**Still don't fully get:**
+- Whether a larger model would fix A3 and D12, or whether they need retrieval changes.
+  Have not tested one.
+
+**Next:** Week 2, Day 8-10 — wrap the pipeline in a FastAPI endpoint. Remaining known
+issues (metadata questions, A3's competing figures) are recorded as limitations rather
+than blockers.

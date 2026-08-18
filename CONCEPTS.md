@@ -182,8 +182,26 @@ alongside the app. The hosted options solve scale problems (millions of vectors,
 multiple users) this project doesn't have. Wrong tool for the size.
 
 **How do you know it actually works?**
-Evaluation set of question/answer pairs, measuring whether the correct chunk is
-retrieved — not just eyeballing a few answers. *(Week 2 — fill in real numbers here.)*
+A 15-question eval set covering five failure categories — specific numbers, correct-source
+attribution, multi-chunk synthesis, paraphrased wording, and refusing questions the
+documents don't answer. Current score: 12 PASS, 2 PARTIAL, 1 FAIL. When a question fails
+I check where the known-correct chunk actually ranked, because rank #11 and rank #250 are
+different bugs with different fixes. *(Day 13 will add precision/recall numbers.)*
+
+**Tell me about a bug you found.**
+Roughly a quarter of the index was garbage and nothing in the output looked wrong. One
+paper embedded the LaTeX source of every equation as hidden text — invisible to a reader,
+extracted by pypdf — making up 44% of that document's characters. Found it by comparing
+chunk counts per file, not by reading answers. Separately, 568 words were split across
+line breaks by PDF hyphenation, so keyword search could never match them: the token
+"floorplancad" did not exist anywhere in the text.
+
+**Why hybrid retrieval instead of just vector search?**
+All four documents are about floorplans, so they sit almost on top of each other in
+meaning space, and the only thing distinguishing them is a proper noun — exactly what
+embeddings compress away. Measured it: the chunk listing one paper's contributions ranked
+#250 by vector search and #1 by keyword search. Adding BM25 alongside the vector search
+turned two failures into passes.
 
 **What are the weaknesses of what you built?**
 The honest list lives in the Open Questions section of `ARCHITECTURE.md`. Being able
