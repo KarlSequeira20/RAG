@@ -10,6 +10,43 @@ in the same way. Spot-check several against the real PDF before trusting the set
 
 Mark each row PASS / FAIL / PARTIAL as you go.
 
+## Results — 2026-08-15 (Day 6), run via `run_eval.py`
+
+**12 PASS, 2 PARTIAL, 1 FAIL.** Config: hybrid BM25 + vector retrieval, RRF with 2
+reserved slots per method, top-k 6, llama3.1:8b.
+
+| # | Verdict | Note |
+|---|---|---|
+| 1, 2, 4 | PASS | Correct figure, correct paper |
+| 3 | PARTIAL | Gets "over 15,000" right, then muddies it with "2,500 files" and "100 projects" pulled from another page |
+| 5, 6 | PASS | |
+| 7 | PASS | Correct; only flagged by the script because the `expect` keyword was poorly chosen |
+| 8, 9, 10 | PASS | 9 was a total failure before hybrid retrieval |
+| 11 | PASS | |
+| 12 | PARTIAL | Answers "a density image" — the network's input, but the paper's pipeline starts from a 3D point cloud projected into that density map |
+| 13 | FAIL | Refused. See below |
+| 14, 15 | PASS | Both refusals correct |
+
+### Q13 — the one outright failure
+
+"Who made FloorPlanCAD?" The affiliation chunk ranks **keyword #11, vector #57**, so it
+never reaches the top 6. Neither method can find it: "Alibaba" does not appear in the
+question, and "who made" has no semantic overlap with an author byline.
+
+This is a **metadata question**, not a content question. Who wrote it, when it was
+published, how long it is — the answers live in headers, not prose, so similarity search
+over chunks is the wrong tool by construction. The fix is to answer from stored metadata
+(the `title` field already works this way) rather than to tune retrieval further.
+
+Also visible in Q13: the model narrated its own indecision ("However, it seems more
+likely to look at [2]...") before refusing. Reasoning leaking into user-facing output.
+
+### What this run says about overfitting
+
+Retrieval settings had been tuned against 5 questions. On the full 15 they held up —
+no regressions, and the two previously-failing questions now pass. Not proof the
+settings are optimal, but they are not obviously overfitted either.
+
 ## The papers
 
 | Short name | File | Topic |

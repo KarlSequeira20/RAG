@@ -211,3 +211,41 @@ the cited source actually contains the answer.
 
 **Next:** run the full 15-question set, record PASS/FAIL, and investigate the generation
 failure.
+
+---
+
+### 2026-08-15 — Day 6 (later)
+
+**Did:**
+- Wrote `run_eval.py` and ran the full 15-question set.
+- Result: 12 PASS, 2 PARTIAL, 1 FAIL. Recorded in `EVAL_QUESTIONS.md`.
+- Diagnosed the one failure.
+
+**Broke / got stuck on:**
+- Q13 "Who made FloorPlanCAD?" fails. The chunk with the author affiliations ranks
+  keyword #11 and vector #57, so it never enters the top 6.
+
+**Learned:**
+- The settings tuned on 5 questions held up across all 15. Worth having checked rather
+  than assumed, and it doesn't prove they're optimal — only that they're not obviously
+  overfitted.
+- Some questions are structurally unanswerable by chunk retrieval. "Who wrote this",
+  "when was it published", "how many pages" are about a document, not about anything
+  said inside it. Similarity search over content cannot find a byline, because a byline
+  isn't semantically similar to a question about authorship. The answer is to serve
+  those from stored metadata, not to keep tuning retrieval.
+- Partial answers are their own failure mode. Q3 states the right number and then adds
+  two unrelated figures from other pages; Q12 answers a narrower question than the one
+  asked. Both would score as passes on a keyword check and are wrong to a reader — which
+  is why an automated `expect` string can't replace reading the answers.
+- Two of my own `expect` keywords were badly chosen and produced false alarms. The
+  grading script narrows what needs attention; it doesn't decide.
+
+**Still don't fully get:**
+- Whether the Q3 noise is a prompt problem (model over-including) or a retrieval one
+  (too many marginal chunks at k=6).
+- The model narrating its own indecision before answering. Probably an 8B artifact,
+  possibly fixable in the prompt.
+
+**Next:** serve metadata-type questions from metadata, and tighten the prompt so answers
+stop dragging in unrelated figures.
