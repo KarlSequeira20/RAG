@@ -11,7 +11,7 @@ import chromadb
 import ollama
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from ingest import DATA_DIR, load_pdf
+from ingest import DATA_DIR, get_title, load_pdf
 
 CHROMA_DIR = Path(__file__).parent / "chroma_db"
 COLLECTION_NAME = "papers"
@@ -44,7 +44,22 @@ def embed_texts(texts):
     return vectors
 
 
-def clean_metadata(metadata, filename):
+def contextualise(text, title):
+    """Prefix a chunk with its paper title, for embedding only.
+
+    Vector search is weak at proper nouns: "FloorPlanCAD" and "CubiCasa5K" both
+    encode as roughly "floorplan dataset", so a question naming one paper does not
+    reliably retrieve from that paper. Worse, a chunk from the middle of a paper
+    says "our dataset" and never repeats the paper's name, so nothing in its
+    embedding ties it to the paper it came from.
+
+    Putting the title into the text we embed gives every chunk that signal. The
+    stored document stays clean -- the title travels in metadata instead.
+    """
+    return f"{title}\n\n{text}"
+
+
+def clean_metadata(metadata, filename, title):
     """Keep only the fields we need for citations.
 
     Chroma accepts str/int/float/bool values, and the raw pypdf metadata is
@@ -53,6 +68,7 @@ def clean_metadata(metadata, filename):
     """
     return {
         "source": filename,
+        "title": title,
         "page": metadata["page"],              # 0-indexed
         "page_label": metadata["page_label"],  # printed page number, as shown to a reader
     }
@@ -70,14 +86,16 @@ def main():
 
     for path in sorted(DATA_DIR.glob("*.pdf")):
         pages = load_pdf(path)
+        title = get_title(path, pages)
         chunks = chunk_pages(pages)
 
         texts = [c.page_content for c in chunks]
-        metadatas = [clean_metadata(c.metadata, path.name) for c in chunks]
+        metadatas = [clean_metadata(c.metadata, path.name, title) for c in chunks]
         ids = [f"{path.name}:{i}" for i in range(len(chunks))]
 
         print(f"{path.name}: {len(pages)} pages -> {len(chunks)} chunks, embedding...")
-        embeddings = embed_texts(texts)
+        # Embed the title-prefixed text, but store the original text unchanged.
+        embeddings = embed_texts([contextualise(t, title) for t in texts])
 
         collection.add(
             ids=ids,

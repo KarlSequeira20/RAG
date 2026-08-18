@@ -1,0 +1,101 @@
+"""Hybrid retrieval: keyword search and vector search, merged.
+
+Vector search matches meaning, so it handles a question phrased differently from
+the text. It is weak at exact tokens -- proper nouns, model names, numbers -- because
+those carry little meaning to compress into a vector.
+
+Keyword search (BM25) is the mirror image: it matches exact words and nothing else,
+so it nails "FloorPlanCAD" or "15,000" but fails completely when the question and the
+document use different words for the same idea.
+
+Running both and combining the rankings covers each one's blind spot.
+"""
+
+import re
+
+import chromadb
+import ollama
+from rank_bm25 import BM25Okapi
+
+from build_index import CHROMA_DIR, COLLECTION_NAME, EMBED_MODEL
+
+# Standard constant from the Reciprocal Rank Fusion paper. It damps the difference
+# between the top ranks so a single search method cannot dominate the merged list.
+RRF_K = 60
+
+# RRF rewards agreement, which becomes a problem when only one method can possibly
+# find something. The chunk listing FloorPlanCAD's three contributions ranks #1 by
+# keyword and #250 by vector -- it is exactly the chunk we need, and pure RRF buries
+# it beneath chunks both methods rank moderately. Reserving a couple of slots for each
+# method's own top hits keeps a confident single-source result from being out-voted.
+RESERVED_PER_METHOD = 2
+
+
+def tokenize(text):
+    """Split into lowercase word tokens for keyword matching.
+
+    Hyphens are removed before splitting so that "FloorPlan-CAD" and "FloorPlanCAD"
+    produce the same token. PDFs break words across lines and papers are inconsistent
+    about hyphenating their own names; as long as documents and queries are normalised
+    the same way, the two still match.
+    """
+    return re.findall(r"\w+", text.lower().replace("-", ""))
+
+
+class HybridRetriever:
+    def __init__(self):
+        self.collection = chromadb.PersistentClient(path=str(CHROMA_DIR)).get_collection(
+            COLLECTION_NAME
+        )
+        # BM25 needs the whole corpus in memory to compute word statistics. Fine at
+        # this scale (a few hundred chunks); a larger corpus would want a real
+        # keyword index such as Elasticsearch instead.
+        data = self.collection.get(include=["documents", "metadatas"])
+        self.ids = data["ids"]
+        self.documents = data["documents"]
+        self.metadatas = data["metadatas"]
+        self.position_of = {chunk_id: i for i, chunk_id in enumerate(self.ids)}
+        self.bm25 = BM25Okapi([tokenize(d) for d in self.documents])
+
+    def vector_ranking(self, question, depth):
+        """Indices of the chunks closest in meaning, best first."""
+        vector = ollama.embed(model=EMBED_MODEL, input=question)["embeddings"][0]
+        result = self.collection.query(query_embeddings=[vector], n_results=depth)
+        # Chroma returns chunk ids; map them to positions in our in-memory lists so
+        # both rankings speak the same language.
+        return [self.position_of[chunk_id] for chunk_id in result["ids"][0]]
+
+    def keyword_ranking(self, question, depth):
+        """Indices of the chunks with the strongest exact-word overlap, best first."""
+        scores = self.bm25.get_scores(tokenize(question))
+        ranked = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
+        return [i for i in ranked[:depth] if scores[i] > 0]
+
+    def search(self, question, k=4, depth=30):
+        """Merge both rankings with Reciprocal Rank Fusion.
+
+        Each list votes for a chunk with 1/(RRF_K + rank). A chunk that both methods
+        rank moderately well beats one that only a single method loves, which is
+        exactly the behaviour we want -- it is the disagreements that cause misses.
+        """
+        rankings = (self.vector_ranking(question, depth), self.keyword_ranking(question, depth))
+
+        scores = {}
+        for ranking in rankings:
+            for rank, idx in enumerate(ranking, start=1):
+                scores[idx] = scores.get(idx, 0) + 1 / (RRF_K + rank)
+
+        # Each method's own top picks go in first, then RRF fills the rest.
+        chosen = []
+        for ranking in rankings:
+            for idx in ranking[:RESERVED_PER_METHOD]:
+                if idx not in chosen:
+                    chosen.append(idx)
+
+        for idx in sorted(scores, key=lambda i: scores[i], reverse=True):
+            if len(chosen) >= k:
+                break
+            if idx not in chosen:
+                chosen.append(idx)
+
+        return [(self.documents[i], self.metadatas[i], scores[i]) for i in chosen[:k]]

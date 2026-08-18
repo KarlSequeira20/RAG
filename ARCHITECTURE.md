@@ -55,11 +55,25 @@ Update a section whenever you make or change a real design decision. Leave "why"
   `build_index.py`.
 
 ## Retrieval
-- **Top-k value used:** 4
+- **Method:** hybrid — BM25 keyword search and vector search, merged with Reciprocal
+  Rank Fusion (`retriever.py`).
+- **Why hybrid:** pure vector search failed on questions naming a specific paper. All
+  four documents are about floorplans, so they are near-identical in meaning space, and
+  the only distinguishing token is a proper noun — exactly what embeddings compress
+  away. Measured: the chunk answering "how many floor plans are in FloorPlanCAD" ranked
+  #13; the chunk listing that paper's three contributions ranked #250 by vector and #1
+  by keyword. Keyword search matches exact tokens, so it covers precisely that gap.
+- **Reserved slots:** plain RRF rewards agreement between methods, which buries a chunk
+  only one method can find. The contributions chunk (keyword #1, vector #250) lost to
+  chunks both methods ranked moderately. Each method now gets 2 guaranteed slots before
+  RRF fills the rest.
+- **Also needed, to make keyword search work at all:** title prefixing at embed time and
+  hyphenation repair — see Chunking and Open Questions.
+- **Top-k value used:** 6 (was 4 with pure vector search)
 - **Why:** Enough that an answer needing facts from two different pages can still be
   assembled, without padding the prompt with mostly-irrelevant text. Not tuned yet —
   Day 13 evaluation should test this properly.
-- **Observed:** distances for a well-covered question run ~0.60-0.68. For a question
+- **Observed (pre-hybrid, vector distances):** for a well-covered question ~0.60-0.68. For a question
   the papers don't address at all ("What is the capital of France?") they jumped to
   ~1.12-1.17. Chroma always returns k results regardless — it has no notion of "no
   match" — but that distance gap is a usable signal. A threshold around 1.0 could skip
@@ -107,8 +121,22 @@ Update a section whenever you make or change a real design decision. Leave "why"
 
 ## Open Questions / Things to Revisit
 (running list of "I did this but I'm not sure it's the right way" items)
+- **Generation is now the weak link, not retrieval.** On "How many floor plans are in
+  the FloorPlanCAD dataset?", the correct chunk *is* retrieved as source [4] and reads
+  "containing over 15,000 floor plans, ranging from residential to commercial
+  buildings". llama3.1:8b quoted the second half of that sentence, stated the sources
+  gave no total, and reported 2,500 from a different page. It had the answer and
+  misread it. Worth testing with fewer chunks in the prompt, a sharper prompt, or a
+  larger model.
 - **Figure and table text pollutes chunks.** (Still open — the `<latexit>` fix below
-  removed the worst of it, but figure *labels* remain.) Diagram labels extracted from figures
+  removed the worst of it, but figure *labels* remain.)
+- **PDF hyphenation was silently breaking keyword search.** Justified text splits words
+  across lines ("FloorPlan-\nCAD", "con-\ntaining") — 568 occurrences across the four
+  papers. Every one was a token no search could match. Now repaired in
+  `ingest.clean_text()`, and `retriever.tokenize()` additionally strips hyphens so
+  "FloorPlan-CAD" and "FloorPlanCAD" match.
+- **Retrieval settings are tuned against 5 questions.** That is not enough to trust.
+  Day 13's full eval set should re-check top-k, reserved slots, and RRF_K. Diagram labels extracted from figures
   (e.g. `[D6]ConvTranspose(512,512,2,2)` strings from an architecture diagram) end up
   as chunk text. On a test query this noise chunk ranked 2nd, at distance 0.649 vs
   0.609 for the genuinely relevant chunk — close enough to displace a real result.

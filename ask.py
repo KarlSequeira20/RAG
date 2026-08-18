@@ -7,15 +7,14 @@ put those chunks in a prompt, and let the LLM answer from them.
 import sys
 from pathlib import Path
 
-import chromadb
 import ollama
 
-CHROMA_DIR = Path(__file__).parent / "chroma_db"
-COLLECTION_NAME = "papers"
+from retriever import HybridRetriever
 
-EMBED_MODEL = "nomic-embed-text"
 LLM_MODEL = "llama3.1:8b"
-TOP_K = 4
+# Wider than the 4 used with pure vector search. Hybrid merges two rankings, so the
+# correct chunk is often present but a place or two lower than a neighbouring one.
+TOP_K = 6
 
 # The instruction that keeps answers grounded. Two things matter here:
 # the model is told to use only the supplied context, and it is given an
@@ -31,27 +30,18 @@ Rules:
 - Be concise."""
 
 
-def retrieve(collection, question, k=TOP_K):
-    """Find the k chunks most similar in meaning to the question."""
-    # The question must be embedded by the same model used to build the index,
-    # otherwise the vectors describe different spaces and the comparison is noise.
-    query_vector = ollama.embed(model=EMBED_MODEL, input=question)["embeddings"][0]
-    results = collection.query(query_embeddings=[query_vector], n_results=k)
-    return list(zip(results["documents"][0], results["metadatas"][0], results["distances"][0]))
-
-
 def build_prompt(question, hits):
     """Lay the retrieved chunks out as numbered sources, then ask the question."""
     blocks = []
-    for i, (text, meta, _dist) in enumerate(hits, start=1):
-        blocks.append(f"[{i}] ({meta['source']}, page {meta['page_label']})\n{text}")
+    for i, (text, meta, _score) in enumerate(hits, start=1):
+        blocks.append(f"[{i}] ({meta['title']} -- {meta['source']}, page {meta['page_label']})\n{text}")
     context = "\n\n".join(blocks)
     return f"Sources:\n\n{context}\n\nQuestion: {question}"
 
 
-def answer(question):
-    collection = chromadb.PersistentClient(path=str(CHROMA_DIR)).get_collection(COLLECTION_NAME)
-    hits = retrieve(collection, question)
+def answer(question, retriever=None):
+    retriever = retriever or HybridRetriever()
+    hits = retriever.search(question, k=TOP_K)
 
     response = ollama.chat(
         model=LLM_MODEL,
@@ -74,8 +64,8 @@ def main():
     print(f"\nQ: {question}\n")
     print(text)
     print("\nSources retrieved:")
-    for i, (_text, meta, dist) in enumerate(hits, start=1):
-        print(f"  [{i}] {meta['source']} page {meta['page_label']}  (distance {dist:.3f})")
+    for i, (_text, meta, score) in enumerate(hits, start=1):
+        print(f"  [{i}] {meta['source']} page {meta['page_label']}  (score {score:.4f})")
 
 
 if __name__ == "__main__":

@@ -158,3 +158,56 @@ Format per entry: date, day number from ROADMAP.md, what I did, what broke, what
 
 **Next:** write 10-15 real questions about these papers and check, for each one, whether
 the cited source actually contains the answer.
+
+---
+
+### 2026-08-15 — Day 6
+
+**Did:**
+- Wrote `EVAL_QUESTIONS.md` — 15 questions in five categories (specific numbers, correct
+  source, multi-chunk, paraphrased, and not-in-documents refusal tests).
+- Ran four of them and found two genuine failures.
+- Fixed a chain of three separate root causes, measuring after each one.
+- Built `retriever.py`: hybrid BM25 + vector retrieval merged with Reciprocal Rank
+  Fusion, and rewired `ask.py` to use it.
+- Added `requirements.txt`.
+
+**Broke / got stuck on:**
+- Questions naming a specific paper retrieved chunks from the wrong paper. Three causes,
+  found one at a time by measuring where the correct chunk actually ranked:
+  1. Vector search cannot distinguish proper nouns. All four papers are about
+     floorplans, so "FloorPlanCAD" and "CubiCasa5K" sit in nearly the same place in
+     meaning space. Fix: prefix each chunk with its paper title before embedding.
+     Result: correct paper now dominates the results, but the right *chunk* still
+     ranked #11 and #250.
+  2. PDF hyphenation. Justified text breaks words across lines — 568 times in these
+     four papers. "FloorPlan-\nCAD" means the token "floorplancad" does not exist, so
+     keyword search could never match it. Fix: rejoin in `clean_text()`, and strip
+     hyphens in the tokenizer.
+  3. RRF rewards agreement. The chunk listing FloorPlanCAD's contributions ranked #1 by
+     keyword and #250 by vector, and lost to chunks both methods ranked mediocrely.
+     Fix: reserve 2 slots for each method's own top hits before RRF fills the rest.
+
+**Learned:**
+- Vector search and keyword search fail in opposite directions. Embeddings handle
+  rephrasing but not exact tokens; BM25 handles exact tokens but not rephrasing. Hybrid
+  retrieval is not a refinement — for this document set it was the difference between
+  answering and not answering.
+- Debugging retrieval means asking "where does the correct chunk actually rank?", not
+  "did the answer look right?". Rank #13 vs #250 vs not-in-corpus are three different
+  bugs with three different fixes, and they are indistinguishable from the answer alone.
+- What gets embedded matters as much as how. A chunk from the middle of a paper says
+  "our dataset" and never names it, so nothing ties it to its source. Adding the title
+  fixed that in one line.
+- Fixing each cause one at a time, and re-measuring, is what made the third cause
+  visible. Changing everything at once would have hidden it.
+
+**Still don't fully get:**
+- Generation is now the bottleneck. On the FloorPlanCAD count question the correct chunk
+  *is* retrieved and llama3.1:8b still misreads it — quoting half the sentence, claiming
+  no total is given, then reporting a wrong number from another page. Unclear whether
+  that is prompt design, too many chunks at once, or the model being 8B.
+- All these settings were tuned against 5 questions. Almost certainly overfitted.
+
+**Next:** run the full 15-question set, record PASS/FAIL, and investigate the generation
+failure.

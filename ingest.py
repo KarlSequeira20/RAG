@@ -19,10 +19,26 @@ DATA_DIR = Path(__file__).parent / "data"
 # competing with real content during retrieval.
 LATEXIT_RE = re.compile(r"<latexit.*?</latexit>", re.DOTALL)
 
+# Justified text hyphenates words across line breaks: "con-\ntaining", "spot-\nting".
+# Extraction preserves the break, so the corpus contains 568 words that no search will
+# ever match because the token simply is not there. Rejoining them repairs both the
+# text a reader sees and the tokens a keyword search can find.
+#
+# Two cases, distinguished by what follows the break:
+#   con-\ntaining  -> containing    (lowercase: a genuine mid-word split, drop the hyphen)
+#   FloorPlan-\nCAD -> FloorPlan-CAD (uppercase: might be a real compound, keep the hyphen)
+# The second case is still not the literal token "FloorPlanCAD", which is why
+# `retriever.tokenize` also normalises hyphens away when matching.
+HYPHEN_BREAK_LOWER = re.compile(r"(\w)-\s*\n\s*([a-z])")
+HYPHEN_BREAK_OTHER = re.compile(r"(\w)-\s*\n\s*([A-Z0-9])")
+
 
 def clean_text(text: str) -> str:
     """Strip extraction artefacts that a human reader would never see."""
-    return LATEXIT_RE.sub("", text)
+    text = LATEXIT_RE.sub("", text)
+    text = HYPHEN_BREAK_LOWER.sub(r"\1\2", text)
+    text = HYPHEN_BREAK_OTHER.sub(r"\1-\2", text)
+    return text
 
 
 def load_pdf(path: Path):
@@ -32,6 +48,31 @@ def load_pdf(path: Path):
     for page in pages:
         page.page_content = clean_text(page.page_content)
     return pages
+
+
+# Titles are what tell one paper apart from another, and the papers do not repeat
+# their own name on every page. pypdf's built-in title metadata is empty for all four
+# of these files, so we keep an explicit map and fall back to the top of page 1.
+TITLES = {
+    "1904.01920v1.pdf": "CubiCasa5K: A Dataset and an Improved Multi-Task Model for Floorplan Image Analysis",
+    "2105.07147v2.pdf": "FloorPlanCAD: A Large-Scale CAD Drawing Dataset for Panoptic Symbol Spotting",
+    "2211.15658v2.pdf": "Connecting the Dots: Floorplan Reconstruction Using Two-Level Queries (RoomFormer)",
+    "ijgi-10-00828-v2.pdf": "Automatic Extraction of Indoor Spatial Information from Floor Plan Image: A Patch-Based Deep Learning Methodology Application on Large-Scale Complex Buildings",
+}
+
+
+def get_title(path: Path, pages) -> str:
+    """Best-effort title for a PDF.
+
+    The hand-written map is reliable for the current document set. The fallback
+    (first couple of lines of page 1) is there so an unknown PDF still gets
+    something rather than nothing -- it will need revisiting when arbitrary
+    uploads are supported.
+    """
+    if path.name in TITLES:
+        return TITLES[path.name]
+    lines = [ln.strip() for ln in pages[0].page_content.splitlines() if ln.strip()]
+    return " ".join(lines[:2])[:200] if lines else path.stem
 
 
 def count_blank_pages(pages) -> int:
