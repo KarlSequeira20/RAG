@@ -11,3 +11,4 @@ trafilatura
 fastapi
 uvicorn
 streamlit
+pytest

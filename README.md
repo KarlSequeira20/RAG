@@ -139,6 +139,12 @@ no opportunity to hallucinate. Retrieval metrics were unchanged.
 The prompt gives the model a sanctioned way to decline. Without one, a model strains to
 answer from training data rather than admit the text isn't there.
 
+**Tests written against real bugs.**
+The suite is mostly regression tests for the failures listed below — hidden LaTeX,
+hyphenated line breaks, duplicate chunks on re-indexing. Verified by reintroducing the
+original bugs and confirming 7 tests failed, because a test that has never failed may be
+asserting nothing.
+
 **Local-only, deliberately.**
 Ollama for both embeddings and generation; Chroma in-process; a 21 MB ONNX reranker with
 no PyTorch. No keys, no costs, nothing to operate.
@@ -193,7 +199,6 @@ Kept deliberately, and each one diagnosed:
 - **hit@k is slightly optimistic.** Ground truth is labelled per page, and a page holds
   several chunks.
 - **No chunk cap per URL.** Nothing stops one large site adding thousands of chunks.
-- **No tests yet.** The most conspicuous gap.
 
 ---
 
@@ -240,6 +245,12 @@ python eval_retrieval.py   # retrieval metrics, with and without reranking
 python run_eval.py         # end-to-end answers for the full question set
 ```
 
+Tests — 38 of them, no network or model calls, well under a second:
+
+```bash
+pytest
+```
+
 ---
 
 ## Repository layout
@@ -256,6 +267,7 @@ python run_eval.py         # end-to-end answers for the full question set
 | `eval_retrieval.py` | Retrieval metrics against labelled ground truth |
 | `run_eval.py` | End-to-end answer evaluation |
 | `chunk_test.py` | The chunk-size experiment used to pick 1000/100 |
+| `tests/` | 38 tests, mostly regression tests for the bugs listed above |
 
 ---
 
@@ -275,10 +287,7 @@ Any web page can be indexed alongside them from the UI.
 
 ## What I would do next
 
-1. **Tests** — `clean_text`, `tokenize` and the re-indexing dedup logic are pure
-   functions with clear inputs and outputs. A silent bug in exactly that code cost a
-   quarter of the index once.
-2. **Query expansion for "why" questions** — search for the problem a mechanism solves,
+1. **Query expansion for "why" questions** — search for the problem a mechanism solves,
    not only the mechanism's name.
 4. **A larger model** — retrieval is at 100% hit@6, so every remaining failure is the
    model misreading text it was correctly given.

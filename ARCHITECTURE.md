@@ -293,6 +293,22 @@ Update a section whenever you make or change a real design decision. Leave "why"
 
 ---
 
+## Tests
+- **`tests/`, 38 tests, run with `pytest`.** No network and no model calls, so the suite
+  runs in about a third of a second.
+- **Mostly regression tests for bugs that actually happened**, rather than coverage for
+  its own sake: hidden `<latexit>` blocks, words hyphenated across line breaks, hyphen
+  normalisation so "FloorPlan-CAD" and "FloorPlanCAD" produce the same token, blank-page
+  detection, page metadata surviving chunking, and re-indexing replacing a file's chunks
+  instead of duplicating them.
+- **Verified by breaking the code on purpose.** Reintroducing the original `clean_text`
+  bugs made 7 tests fail immediately. A test that has never been seen to fail may be
+  asserting nothing.
+- **`index_pdf` is tested without Chroma or Ollama**, using a fake collection object that
+  records what it was asked to do, and monkeypatching `embed_texts`. The dedup logic
+  under test does not need real embeddings, and keeping them out is what makes the suite
+  fast enough to run constantly.
+
 ## Open Questions / Things to Revisit
 (running list of "I did this but I'm not sure it's the right way" items)
 - **"Why" questions retrieve the wrong section, and it is structural.** Asking why a

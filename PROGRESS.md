@@ -551,3 +551,35 @@ than blockers.
   here was either clearly relevant or clearly not.
 
 **Next:** tests, then the demo video.
+
+---
+
+### 2026-08-15 — Day 20
+
+**Did:**
+- Added `tests/`: 38 pytest tests across ingestion, tokenisation, chunking, metadata and
+  the re-indexing path. Whole suite runs in 0.33s with no network or model calls.
+- Verified the tests are real by reintroducing the original `clean_text` bugs — 7 failed
+  immediately — then restoring the fix.
+
+**Broke / got stuck on:**
+- Nothing. Deliberately broke the code once, which was the point.
+
+**Learned:**
+- A test that has never failed may be asserting nothing. Reintroducing the bugs was the
+  only way to know these tests earn their place, and it took about a minute.
+- Writing regression tests for bugs that actually happened is more useful than chasing
+  coverage. Every test here has a reason: the hidden LaTeX cost a quarter of the index,
+  the hyphenation bug made 568 words unfindable, re-indexing used to duplicate chunks.
+- Keeping the model and database out of the tests is what makes them fast enough to run
+  constantly. `index_pdf` is tested with a fake collection object that records what it
+  was asked to do, and `embed_texts` monkeypatched away — the dedup logic under test
+  never needed real embeddings.
+- A test would have caught the `ask.py` breakage from earlier this week instantly, where
+  a patch replaced a function definition instead of inserting above it.
+
+**Still don't fully get:**
+- Nothing new. Retrieval and generation are untested at the integration level, which is
+  deliberate — those need Ollama running and are covered by the eval scripts instead.
+
+**Next:** demo video, then the project is finished.
