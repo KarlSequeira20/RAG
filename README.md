@@ -94,7 +94,7 @@ flowchart TD
         A[PDFs and URLs] --> B[Extract text<br/>strip hidden LaTeX,<br/>repair hyphenation,<br/>drop web furniture]
         B --> C[Chunk<br/>1000 chars / 100 overlap]
         C --> D[Embed with paper title prefixed<br/>nomic-embed-text, 768-dim]
-        D --> E[(Chroma<br/>303 chunks)]
+        D --> E[(Chroma)]
     end
 
     subgraph QUERY ["Querying — per question"]
@@ -291,7 +291,8 @@ domain I am actually working in rather than a generic sample set:
 - **RoomFormer** — floorplan reconstruction from 3D scans using two-level queries
 - **Patch-based floor plan analysis** — CNN on normalised patches for large buildings
 
-Any web page can be indexed alongside them from the UI.
+Any web page can be indexed alongside them from the UI, which is why the screenshots
+above show a higher chunk count than 303.
 
 ---
 
