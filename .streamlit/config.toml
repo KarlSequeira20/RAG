@@ -1,0 +1,4 @@
+[client]
+# Hides Streamlit's built-in Deploy button and developer menu. This app is not
+# deployed, so the button offers nothing and only clutters the screenshots.
+toolbarMode = "minimal"
