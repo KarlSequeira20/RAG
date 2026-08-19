@@ -165,8 +165,37 @@ Update a section whenever you make or change a real design decision. Leave "why"
 - **Caveat:** the expected answers were drawn from the extracted text, which is the same
   text the system reads. Not independent ground truth. Several should be checked against
   the original PDFs.
-- **Not yet measured:** retrieval precision/recall as numbers rather than per-question
-  verdicts. Day 13.
+- **Retrieval measured separately (`eval_retrieval.py`).** The generation stage can only
+  be as good as what reaches it, so retrieval is scored on its own against 16 questions
+  labelled with the document and page(s) that contain the answer. E14/E15 are excluded —
+  they have no correct chunk to retrieve, so retrieval metrics are meaningless for them.
+
+  | k | hit@k | doc@k | MRR |
+  |---|---|---|---|
+  | 1 | 50% | 100% | 0.500 |
+  | 3 | 81% | 100% | 0.646 |
+  | **6 (current)** | **94%** | **100%** | **0.677** |
+  | 10 | 100% | 100% | 0.685 |
+
+  - `hit@k` — a chunk from the right file and right page appears in the top k.
+  - `doc@k` — the right paper appears at all, ignoring which page.
+  - `MRR` — mean reciprocal rank of the first correct chunk; 1.0 would mean always first.
+
+  **doc@k is 100% at every k, including k=1** — the correct paper is always retrieved.
+  That is the title-prefixing fix validated: the original failure was questions about
+  FloorPlanCAD returning CubiCasa chunks.
+
+  **hit@10 is 100%**, so every answer is reachable and the remaining problem is ranking,
+  not coverage. The single miss at k=6 is F16, the "why" question.
+
+  **Caveat — this is slightly optimistic.** Ground truth is labelled per page, and a page
+  holds several chunks. D13 counts as a hit whenever any page-1 chunk is retrieved, even
+  though the chunk with the author affiliations is not among them (keyword #11, vector
+  #57). Chunk-level labels would be more accurate and much more laborious.
+
+- **RAGAS not used.** The metrics here are computed against hand-labelled ground truth,
+  which is more informative for this project than a framework score, and avoids adding an
+  LLM-judge dependency to a deliberately local-only stack.
 
 ## Frontend
 - **Run with:** `./.venv/bin/streamlit run app.py`

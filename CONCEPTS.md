@@ -182,11 +182,18 @@ alongside the app. The hosted options solve scale problems (millions of vectors,
 multiple users) this project doesn't have. Wrong tool for the size.
 
 **How do you know it actually works?**
-A 15-question eval set covering five failure categories — specific numbers, correct-source
+Two levels of measurement. End to end: an 18-question eval set covering six failure
+categories — specific numbers, correct-source
 attribution, multi-chunk synthesis, paraphrased wording, and refusing questions the
 documents don't answer. Current score: 12 PASS, 2 PARTIAL, 1 FAIL. When a question fails
 I check where the known-correct chunk actually ranked, because rank #11 and rank #250 are
-different bugs with different fixes. *(Day 13 will add precision/recall numbers.)*
+different bugs with different fixes.
+
+Retrieval is also scored on its own, against questions labelled with the document and page
+holding the answer: hit@6 is 94%, doc@k is 100% at every k, MRR 0.677, and hit@10 is 100%.
+Measuring retrieval separately matters because generation can only be as good as what
+reaches it — hit@10 being 100% says every answer is reachable and the remaining problem is
+ranking, not coverage.
 
 **Tell me about a bug you found.**
 Roughly a quarter of the index was garbage and nothing in the output looked wrong. One

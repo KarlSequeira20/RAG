@@ -397,3 +397,41 @@ than blockers.
   boosting abstract/introduction chunks, both sound plausible and neither is tested.
 
 **Next:** Day 13-14 evaluation with retrieval numbers, then deployment planning.
+
+---
+
+### 2026-08-15 — Day 13
+
+**Did:**
+- Decided to keep the project local-only rather than deploying. Accepted tradeoff: nobody
+  can run it without cloning, so the README and demo video have to carry the whole
+  explanation.
+- Wrote `eval_retrieval.py` — scores the retrieval stage on its own against 16 questions
+  labelled with the document and page(s) containing the answer.
+- Results at the current k=6: hit@6 94%, doc@k 100%, MRR 0.677. hit@10 is 100%.
+
+**Broke / got stuck on:**
+- Nothing broke, but the numbers are slightly optimistic and it's worth being honest
+  about why. Ground truth is labelled per page, and a page holds several chunks, so D13
+  scores as a hit whenever any page-1 chunk is retrieved — even though the chunk with the
+  author affiliations is not among them.
+
+**Learned:**
+- Measuring retrieval separately from the whole system says something the end-to-end
+  score can't. hit@10 = 100% means every answer is reachable and the remaining failures
+  are ranking problems, not coverage problems. That distinction decides what to work on.
+- doc@k = 100% even at k=1 is direct evidence the title-prefixing fix worked. The original
+  bug was questions about one paper retrieving chunks from another; that is now gone at
+  every k.
+- MRR and hit@k measure different things. hit@k only asks whether the chunk arrived;
+  MRR asks how high it ranked. A change can improve one without the other.
+- The granularity of ground truth is itself a measurement decision. Page-level labels
+  were quick and are slightly generous; chunk-level labels would be accurate and much
+  slower. Worth stating rather than quoting the friendlier number.
+
+**Still don't fully get:**
+- Whether raising k from 6 to 10 is worth it. It takes hit@k from 94% to 100%, but adds
+  four more chunks to every prompt, and the generation stage already misreads chunks it
+  is given. More context could easily make answers worse.
+
+**Next:** README and demo video.
