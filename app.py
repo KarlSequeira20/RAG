@@ -44,18 +44,27 @@ def index_uploaded_file(uploaded):
 
 st.title("Ask the floorplan papers")
 st.caption(
-    "Answers come only from the indexed PDFs. Every answer lists the sources it used, "
-    "so you can check it yourself."
+    "Answers come only from the indexed documents. Every answer lists the sources it "
+    "used, so you can check it yourself."
 )
 
 with st.sidebar:
     st.header("Documents")
 
     retriever = load_retriever()
-    indexed = sorted({m["source"] for m in retriever.metadatas})
-    st.write(f"**{len(retriever.documents)} chunks** from {len(indexed)} document(s):")
-    for name in indexed:
-        st.write(f"- {name}")
+    # One entry per source, showing its title rather than a raw filename or URL --
+    # a long URL wraps over several lines and says less than the page's own title.
+    sources = {}
+    for meta in retriever.metadatas:
+        sources.setdefault(meta["source"], meta)
+
+    st.write(f"**{len(retriever.documents)} chunks** from {len(sources)} document(s):")
+    for source, meta in sorted(sources.items(), key=lambda kv: kv[1]["title"].lower()):
+        chunks = sum(1 for m in retriever.metadatas if m["source"] == source)
+        if meta.get("kind") == "web":
+            st.markdown(f"- [{meta['title']}]({source}) · {chunks} chunks")
+        else:
+            st.markdown(f"- **{meta['title'][:60]}**  \n  `{source}` · {chunks} chunks")
 
     st.divider()
     uploaded = st.file_uploader("Add a PDF", type="pdf")
