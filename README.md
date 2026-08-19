@@ -10,28 +10,8 @@ Runs entirely locally — no API keys, no cloud, no per-query cost.
 The answer says 5,000 — and the expanded source shows the paragraph it came from, so the
 claim is checkable rather than trusted.
 
-```
-$ python ask.py "How many floor plans are in the FloorPlanCAD dataset?"
-
-The FloorPlanCAD dataset contains over 15,000 floor plans [1]. These floor plans are
-derived from various projects, including residential buildings, schools, hospitals, and
-large shopping malls with complicated structures [6].
-
-Sources retrieved:
-  [1] 2105.07147v2.pdf, page 1  (score 0.9988)
-  [2] 1904.01920v1.pdf, page 4  (score 0.9943)
-  [3] 2105.07147v2.pdf, page 3  (score 0.9649)
-  ...
-```
-
 Ask it something the documents don't cover and it says so, instead of inventing an
 answer:
-
-```
-$ python ask.py "What is the architecture of the BERT language model?"
-
-That isn't covered in these documents.
-```
 
 ![The app refusing a question the documents do not cover](docs/screenshot-refusal.png)
 
