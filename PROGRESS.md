@@ -286,3 +286,37 @@ stop dragging in unrelated figures.
 **Next:** Week 2, Day 8-10 — wrap the pipeline in a FastAPI endpoint. Remaining known
 issues (metadata questions, A3's competing figures) are recorded as limitations rather
 than blockers.
+
+---
+
+### 2026-08-15 — Day 8
+
+**Did:**
+- Wrote `api.py`: FastAPI wrapper over the pipeline. `GET /health` and `POST /ask`.
+- Built the retriever once at startup via a `lifespan` handler instead of per request.
+- Tested seven error cases with curl; all behave as intended.
+- Added fastapi and uvicorn to `requirements.txt`.
+
+**Broke / got stuck on:**
+- Nothing broke. One gap found while testing: a whitespace-only question `"   "` passes
+  Pydantic's `min_length=1`, so it needed an explicit check after stripping.
+
+**Learned:**
+- Pydantic handled four of the seven error cases without any code in the endpoint —
+  empty string, missing field, malformed JSON, oversized input all rejected before the
+  function runs, each with a 422 and a message naming the offending field. Validation
+  written by describing the data rather than by writing checks.
+- Declarative validation still has edges. `min_length=1` is about length, not content,
+  so whitespace slips through. Worth knowing where the automatic help stops.
+- Where expensive setup lives matters. `HybridRetriever()` loads the corpus and builds
+  BM25 statistics; in a CLI that runs once per process it can sit anywhere, but in a
+  server it has to move to startup or every request pays for it.
+- "No answer in the documents" is a 200, not a 4xx. The request succeeded and the
+  system correctly reported that the corpus doesn't cover it. Making that an error would
+  be wrong, and would make the refusal behaviour look like a malfunction to a client.
+
+**Still don't fully get:**
+- The 503 path for Ollama being down is written but untested — didn't want to stop the
+  Ollama service to exercise it.
+
+**Next:** Day 11-12, a Streamlit UI on top of this API.

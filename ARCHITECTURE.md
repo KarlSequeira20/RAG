@@ -116,8 +116,32 @@ Update a section whenever you make or change a real design decision. Leave "why"
     Needs to become just the filename before Week 3.
 
 ## API Layer
+- **Run with:** `./.venv/bin/uvicorn api:app --reload`
 - **Endpoints:**
+  - `GET /health` — liveness, plus the number of chunks currently indexed and the model
+    in use. Returns 503 if the retriever failed to load.
+  - `POST /ask` — `{"question": "..."}` in; question, answer, model, and a list of
+    sources out. Each source carries its number (matching the `[1]` citations in the
+    answer), paper title, filename, printed page number, and a 300-character snippet so
+    a caller can verify the citation without opening the PDF.
+- **Retriever is built once at startup**, in a FastAPI `lifespan` handler, not per
+  request. Constructing a `HybridRetriever` reads all 303 chunks out of Chroma and
+  computes BM25 statistics over the whole corpus — acceptable once, wasteful per call.
 - **Error cases handled:**
+  | Case | Status | Handled by |
+  |---|---|---|
+  | Empty question `""` | 422 | Pydantic `min_length=1` |
+  | Whitespace-only question | 422 | Explicit check — `min_length` does not catch it |
+  | Missing `question` field | 422 | Pydantic |
+  | Malformed JSON body | 422 | Pydantic |
+  | Question over 1000 chars | 422 | Pydantic `max_length` |
+  | GET on `/ask` | 405 | FastAPI routing |
+  | Question the papers don't answer | 200 | Model returns the refusal string — not an error |
+  | Ollama down / model missing | 503 | `try/except` around generation |
+- **Untested:** the 503 path for Ollama being unreachable. The handler exists but has not
+  been exercised against a stopped Ollama.
+- **Note:** an unanswerable question is deliberately a 200, not an error. "The documents
+  don't cover this" is a successful, correct response.
 
 ## Evaluation
 - **Eval set size:** 15 questions (`EVAL_QUESTIONS.md`), across five categories: specific
