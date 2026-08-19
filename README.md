@@ -24,9 +24,6 @@ Sources retrieved:
   ...
 ```
 
-Note source [2] — a chunk from a *different* paper made the top 6. Retrieval returns the
-best candidates it has; the prompt's job is to stop the model using irrelevant ones.
-
 Ask it something the documents don't cover and it says so, instead of inventing an
 answer:
 
