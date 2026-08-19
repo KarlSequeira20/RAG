@@ -194,6 +194,17 @@ Update a section whenever you make or change a real design decision. Leave "why"
 
 ## Open Questions / Things to Revisit
 (running list of "I did this but I'm not sure it's the right way" items)
+- **"Why" questions retrieve the wrong section, and it is structural.** Asking why a
+  mechanism exists retrieves the results and ablation text rather than the motivation.
+  The motivation chunk describes the *problem* in the problem's vocabulary and never
+  names the mechanism, while the ablation chunks are full of the mechanism's name — so a
+  question naming the mechanism matches the results section. Measured on "Why does
+  RoomFormer use two-level queries?": the chunk stating the real reason (a floorplan has
+  a variable number of rooms, each with a variable number of corners) ranks keyword #9
+  and vector #27, outside the top 6 for both, so hybrid retrieval does not rescue it.
+  This is not a tuning problem — it is how papers are written. Possible directions:
+  query expansion toward the problem a mechanism solves, or weighting abstract and
+  introduction chunks higher for "why" questions. Not attempted yet.
 - **Generation is now the weak link, not retrieval.** On "How many floor plans are in
   the FloorPlanCAD dataset?", the correct chunk *is* retrieved as source [4] and reads
   "containing over 15,000 floor plans, ranging from residential to commercial

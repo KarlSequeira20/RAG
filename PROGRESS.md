@@ -360,3 +360,40 @@ than blockers.
 - The scanned-PDF upload path is written but untested, having no scan to try.
 
 **Next:** Day 13-14 evaluation with real retrieval numbers, then deployment.
+
+---
+
+### 2026-08-15 — Day 11 (later)
+
+**Did:**
+- Got feedback on my own reading of the papers, checked against the original PDFs. Used
+  it as independent ground truth — everything before this was graded against the same
+  extracted text the system reads, so it was never a real check.
+- Turned three of the corrected points into eval questions 16-18 and ran them.
+- Result: 2 PASS, 1 FAIL. Diagnosed the failure.
+
+**Broke / got stuck on:**
+- Q16 "Why does RoomFormer use two-level queries?" The system answered with "relaxes the
+  role of each query" and cited ablation tables, never giving the actual reason: a
+  floorplan has a variable number of rooms, and each room a variable number of corners.
+
+**Learned:**
+- "Why" questions are their own failure category. The chunk with the real answer ranks
+  keyword #9 / vector #27 because it never uses the phrase "two-level queries" — it
+  describes the problem in the problem's vocabulary. The ablation chunks are full of that
+  phrase, so they match a question built from it. The system retrieves text that shares
+  words with the question rather than text that answers it, and no amount of retrieval
+  tuning changes that.
+- This follows from how papers are structured: motivation sits in the abstract and
+  introduction phrased as a difficulty; the named mechanism appears later beside results.
+  A question naming the mechanism will always resemble the results section more.
+- I made the same mistake reading the papers myself, for the same reason — the method and
+  results text is more prominent than the one sentence stating why.
+- Independent ground truth is worth seeking out. The 12/15 score came from expected
+  answers written off the extracted text, which cannot catch an error shared by both.
+
+**Still don't fully get:**
+- How to fix "why" questions. Query expansion toward the problem a mechanism solves, or
+  boosting abstract/introduction chunks, both sound plausible and neither is tested.
+
+**Next:** Day 13-14 evaluation with retrieval numbers, then deployment planning.

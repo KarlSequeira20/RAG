@@ -12,7 +12,8 @@ Mark each row PASS / FAIL / PARTIAL as you go.
 
 ## Results — 2026-08-15 (Day 6), run via `run_eval.py`
 
-**12 PASS, 2 PARTIAL, 1 FAIL.** Config: hybrid BM25 + vector retrieval, RRF with 2
+**12 PASS, 2 PARTIAL, 1 FAIL** on questions 1-15; **2 PASS, 1 FAIL** on the "why"
+questions added later (section F). Config: hybrid BM25 + vector retrieval, RRF with 2
 reserved slots per method, top-k 6, llama3.1:8b.
 
 | # | Verdict | Note |
@@ -117,6 +118,49 @@ handle. If these fail, the failure is in retrieval, not the LLM.
 Answering it means grounding has failed. Q14 is harder: it's on-topic enough that
 retrieval will return plausible-looking CubiCasa5K chunks, so the LLM has to notice the
 chunks don't actually answer the question.
+
+---
+
+## F. "Why" questions — added Day 11, from independent ground truth
+
+These came from feedback on my own reading of the papers, checked against the original
+PDFs rather than the extracted text. That makes them the only questions here with
+genuinely independent expected answers.
+
+| # | Question | Expected | Source | Result |
+|---|---|---|---|---|
+| 16 | Why does RoomFormer use two-level queries instead of a single level? | A floorplan has a variable number of rooms, and each room a variable number of corners. Predicting doors/windows is an added capability, not the reason | RoomFormer, p1-2 | **FAIL** |
+| 17 | What is the trade-off when choosing the patch size? | Smaller patch = better resolution but less context/field of view; larger patch = more context but worse resolution | Patch-based, p6-7 | PASS |
+| 18 | What does the multi-task uncertainty loss do? | Automatically learns the weights for each task's loss, removing manual tuning | CubiCasa5K, p3, p8 | PASS |
+
+### Q16 — why "why" questions are their own failure category
+
+The chunk holding the answer (`2211.15658v2.pdf:5`, page 2) reads:
+
+> "each floorplan has a different number of rooms (with no natural order), and each
+> room polygon has a different number of (ordered) corners"
+
+It ranks **keyword #9, vector #27** — outside the top 6 for both methods, so hybrid
+retrieval cannot rescue it either.
+
+The reason is a vocabulary mismatch, and it is structural rather than a tuning problem.
+That sentence never contains the phrase "two-level queries": it describes the *problem*,
+in the problem's own words. The ablation-study chunks on pages 5 and 8 are full of "two-
+level queries" and "improves", so they match a question built from those words. The
+system retrieves text that shares vocabulary with the question rather than text that
+answers it.
+
+This is a general property of papers: motivation appears in the abstract and
+introduction, phrased as a difficulty, while the term being motivated appears later
+beside results. A question naming the mechanism will always look more like the results
+section than like the motivation.
+
+Worth noting the same mistake was made reading the papers by hand — the method and
+results text crowds out the plain statement of why.
+
+**Not fixed.** Possible directions: query expansion (also search for the problem the
+mechanism solves), or weighting chunks from the abstract and introduction more heavily
+for "why" questions.
 
 ---
 
