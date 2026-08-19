@@ -11,6 +11,8 @@ import chromadb
 import ollama
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+from langchain_core.documents import Document
+
 from ingest import DATA_DIR, get_title, load_pdf
 
 CHROMA_DIR = Path(__file__).parent / "chroma_db"
@@ -69,6 +71,7 @@ def clean_metadata(metadata, filename, title):
     return {
         "source": filename,
         "title": title,
+        "kind": "pdf",
         "page": metadata["page"],              # 0-indexed
         "page_label": metadata["page_label"],  # printed page number, as shown to a reader
     }
@@ -101,6 +104,41 @@ def index_pdf(collection, path):
         metadatas=[clean_metadata(c.metadata, path.name, title) for c in chunks],
     )
     return len(chunks), blank_pages
+
+
+def index_url(collection, url):
+    """Fetch a web page, chunk it and store it. Returns (chunks added, title).
+
+    Web pages have no pages to cite, so chunks are numbered as parts instead. The
+    `kind` field lets every display surface label a source correctly without guessing
+    from the filename.
+    """
+    from web import fetch_page  # imported here so PDF-only use needs no web dependency
+
+    title, text = fetch_page(url)
+    chunks = chunk_pages([Document(page_content=text, metadata={})])
+
+    existing = collection.get(where={"source": url}, include=[])["ids"]
+    if existing:
+        collection.delete(ids=existing)
+
+    texts = [c.page_content for c in chunks]
+    collection.add(
+        ids=[f"{url}:{i}" for i in range(len(chunks))],
+        documents=texts,
+        embeddings=embed_texts([contextualise(x, title) for x in texts]),
+        metadatas=[
+            {
+                "source": url,
+                "title": title,
+                "kind": "web",
+                "page": i,
+                "page_label": str(i + 1),  # "part N" -- a web page has no page numbers
+            }
+            for i in range(len(chunks))
+        ],
+    )
+    return len(chunks), title
 
 
 def get_collection():

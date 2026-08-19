@@ -1,11 +1,13 @@
 langchain
 langchain-community
 langchain-text-splitters
+langchain-core
 chromadb
 pypdf
 ollama
 rank_bm25
 flashrank
+trafilatura
 fastapi
 uvicorn
 streamlit

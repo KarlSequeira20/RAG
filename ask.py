@@ -44,11 +44,22 @@ Rules:
 - Be concise: one or two sentences unless the question asks for a list."""
 
 
+def describe_location(meta):
+    """Human-readable pointer to where a chunk came from.
+
+    PDFs cite a page number; web pages have none, so their chunks are cited as parts.
+    Chunks indexed before web support existed have no `kind`, hence the default.
+    """
+    if meta.get("kind") == "web":
+        return f"{meta['source']}, part {meta['page_label']}"
+    return f"{meta['source']}, page {meta['page_label']}"
+
+
 def build_prompt(question, hits):
     """Lay the retrieved chunks out as numbered sources, then ask the question."""
     blocks = []
     for i, (text, meta, _score) in enumerate(hits, start=1):
-        blocks.append(f"[{i}] ({meta['title']} -- {meta['source']}, page {meta['page_label']})\n{text}")
+        blocks.append(f"[{i}] ({meta['title']} -- {describe_location(meta)})\n{text}")
     context = "\n\n".join(blocks)
     return f"Sources:\n\n{context}\n\nQuestion: {question}"
 
@@ -79,7 +90,7 @@ def main():
     print(text)
     print("\nSources retrieved:")
     for i, (_text, meta, score) in enumerate(hits, start=1):
-        print(f"  [{i}] {meta['source']} page {meta['page_label']}  (score {score:.4f})")
+        print(f"  [{i}] {describe_location(meta)}  (score {score:.4f})")
 
 
 if __name__ == "__main__":

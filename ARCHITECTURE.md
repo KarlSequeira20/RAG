@@ -17,6 +17,31 @@ Update a section whenever you make or change a real design decision. Leave "why"
   reading isn't throwaway. All four are born-digital (LaTeX/publisher-generated), not
   scans, so text extraction works without OCR — verified, 0 blank pages out of 60.
 
+## Web Page Ingestion (added Day 13)
+- **What:** any URL can be indexed alongside the PDFs (`web.py`, `build_index.index_url`).
+  The vector store does not care where text came from, so web chunks sit in the same
+  collection and are retrieved by the same hybrid search and reranker.
+- **Extraction:** `trafilatura`, not raw HTML parsing. A typical page is mostly
+  navigation, cookie banners, footers, "related articles" and ads; indexing those
+  produces chunks that compete with real content during retrieval — the same failure the
+  hidden LaTeX source caused in the PDFs. trafilatura identifies the main article body
+  and discards the furniture.
+- **Citation:** web pages have no page numbers, so their chunks are cited as *parts*
+  (part 1, part 2...). A `kind` field on every chunk (`"pdf"` or `"web"`) drives this, so
+  no display surface has to guess from the filename. `ask.describe_location()` is the one
+  place that formats it, shared by the CLI, API and UI.
+- **Snapshot, not live.** A page is fetched once at index time and not re-checked when a
+  question is asked. Re-fetching per query would mean re-extracting and re-embedding on
+  every question. The consequence — an index can go stale — is stated in the UI.
+- **Failure cases handled:** non-http URLs, unreachable or blocking hosts, and pages with
+  no extractable text. The last is common and worth naming: a page built entirely in
+  JavaScript returns nothing, because only the initial HTML is fetched and no browser
+  runs to build the page.
+- **Verified:** indexed the Wikipedia article on retrieval-augmented generation (20
+  chunks). Asking "What is retrieval-augmented generation?" retrieves only web chunks;
+  asking about CubiCasa5K retrieves only PDF chunks. Retrieval metrics were unchanged
+  after adding it, so the new content did not crowd out the papers.
+
 ## Chunking
 - **Chunk size / overlap used:** 1000 characters, 100 overlap, via
   `RecursiveCharacterTextSplitter`. Produces 305 chunks across the 4 papers

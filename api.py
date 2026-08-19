@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-from ask import LLM_MODEL, TOP_K, answer
+from ask import LLM_MODEL, TOP_K, answer, describe_location
 from retriever import HybridRetriever
 
 MAX_QUESTION_CHARS = 1000
@@ -51,8 +51,10 @@ class AskRequest(BaseModel):
 class Source(BaseModel):
     n: int
     title: str
-    source: str
-    page: str
+    source: str          # filename for a PDF, URL for a web page
+    kind: str            # "pdf" or "web"
+    page: str            # page number for a PDF, part number for a web page
+    location: str        # human-readable, e.g. "paper.pdf, page 4"
     snippet: str
 
 
@@ -94,7 +96,9 @@ def ask(request: AskRequest):
             n=i,
             title=meta["title"],
             source=meta["source"],
+            kind=meta.get("kind", "pdf"),
             page=meta["page_label"],
+            location=describe_location(meta),
             snippet=chunk[:300],
         )
         for i, (chunk, meta, _score) in enumerate(hits, start=1)

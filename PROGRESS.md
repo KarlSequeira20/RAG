@@ -474,3 +474,43 @@ than blockers.
   has both in front of it. Possibly the ablation text repeats the question's wording more.
 
 **Next:** tests, then README and demo video.
+
+---
+
+### 2026-08-15 — Day 13 (web ingestion)
+
+**Did:**
+- Added `web.py` and `build_index.index_url()`: any URL can now be fetched, cleaned and
+  indexed alongside the PDFs.
+- Added a `kind` field to chunk metadata and a shared `describe_location()` so PDFs are
+  cited by page and web pages by part, in the CLI, API and UI alike.
+- Added a URL box to the Streamlit sidebar and extended the API response with `kind` and
+  `location`.
+- Verified on the Wikipedia RAG article: 20 chunks, and questions route to the right
+  source type. Retrieval metrics unchanged (hit@6 still 100%, MRR still 0.783).
+
+**Broke / got stuck on:**
+- Broke `ask.py` while patching it — the edit replaced `build_prompt`'s definition line
+  instead of inserting the new function above it, so the file imported fine and then
+  raised `NameError: name 'build_prompt' is not defined` at call time.
+
+**Learned:**
+- Adding a whole new source type needed one new file, because everything after chunking
+  operates on text plus metadata and does not care where it came from. Designing around
+  a common representation early is what made this cheap.
+- Every source format has its own junk problem. PDFs hide LaTeX and figure labels; web
+  pages are mostly navigation, banners and footers around a little real content. Same
+  symptom either way — junk chunks competing with real content — so extraction quality
+  matters more than fetching.
+- "Live" needed a deliberate decision. Fetching per question would mean re-extracting and
+  re-embedding every time, so the page is indexed once as a snapshot. The cost is that
+  the index can go stale, which the UI now says out loud.
+- Pages built entirely in JavaScript return nothing, because only the initial HTML is
+  fetched and no browser runs to build the page. Worth an explicit error message rather
+  than an empty result.
+
+**Still don't fully get:**
+- Whether a large indexed site would drown out the papers. It did not at 20 chunks, but
+  nothing prevents one URL from adding thousands.
+
+**Next:** tests, then README and demo video.

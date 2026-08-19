@@ -12,8 +12,8 @@ from pathlib import Path
 
 import streamlit as st
 
-from ask import LLM_MODEL, TOP_K, answer
-from build_index import get_collection, index_pdf
+from ask import LLM_MODEL, TOP_K, answer, describe_location
+from build_index import get_collection, index_pdf, index_url
 from ingest import DATA_DIR
 from retriever import HybridRetriever
 
@@ -75,6 +75,23 @@ with st.sidebar:
             st.rerun()
 
     st.divider()
+    url = st.text_input("Or add a web page", placeholder="https://...")
+    if url and st.button("Index this URL", use_container_width=True):
+        with st.spinner(f"Fetching {url}..."):
+            try:
+                added, page_title = index_url(get_collection(), url.strip())
+            except Exception as exc:
+                st.error(str(exc))
+            else:
+                load_retriever.clear()
+                st.success(f"Indexed “{page_title}”: {added} chunks.")
+                st.rerun()
+    st.caption(
+        "A page is fetched once and indexed as a snapshot — it is not re-checked when "
+        "you ask a question, so the content can go stale."
+    )
+
+    st.divider()
     st.caption(f"Model: `{LLM_MODEL}` · top-k: {TOP_K} · hybrid BM25 + vector retrieval")
 
 question = st.text_input(
@@ -101,7 +118,7 @@ if question.strip():
             "text the model was given."
         )
         for i, (chunk, meta, score) in enumerate(hits, start=1):
-            label = f"[{i}] {meta['source']} — page {meta['page_label']}"
+            label = f"[{i}] {describe_location(meta)}"
             with st.expander(label):
                 st.caption(meta["title"])
                 st.write(chunk)

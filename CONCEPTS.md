@@ -49,6 +49,20 @@ silent — the pipeline "succeeds" and produces nothing. Getting text out of sca
 needs OCR (optical character recognition, e.g. Tesseract), which is a separate
 problem.
 
+### Where the text comes from
+Nothing downstream cares whether a chunk came from a PDF or a web page — by the time
+text is chunked and embedded, it is just text with metadata attached. That is why adding
+web pages to this system took one new file rather than a redesign.
+
+What differs is the extraction step, and each source type has its own trap. PDFs hide
+things a reader never sees (embedded LaTeX, figure labels). Web pages are mostly
+furniture — navigation, cookie banners, footers, ads — surrounding a small amount of
+actual content. Both traps produce the same symptom: chunks full of junk that compete
+with real content during retrieval.
+
+One more difference worth knowing: a web page can change after you index it. The index
+is a snapshot taken at ingestion time, not a live view.
+
 ### Chunking
 Cutting the text into smaller pieces to be searched individually.
 
@@ -151,6 +165,7 @@ sometimes make things up.
 | **`nomic-embed-text`** | The embedding model, via Ollama, 768 dimensions | Turns text into meaning-vectors |
 | **Chroma** | Vector database, runs in-process, saves to a local folder | Stores and searches the vectors; nothing to deploy or operate |
 | **BM25** (`rank_bm25`) | Classic keyword search — scores exact word overlap | Finds proper nouns and numbers, which embeddings compress away |
+| **trafilatura** | Pulls the main article text out of a web page | Strips navigation, banners and footers, which would otherwise become chunks competing with real content |
 | **flashrank** | Cross-encoder reranker, 21.6 MB, runs on onnxruntime | Rescores the top candidates jointly against the question; no PyTorch needed |
 | **FastAPI** *(Week 2)* | Turns Python functions into a web API | Lets a frontend — or anyone — call the pipeline over HTTP |
 | **Streamlit** *(Week 2)* | Builds a simple web UI from a Python script | A usable interface without writing frontend code |
