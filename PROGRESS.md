@@ -320,3 +320,43 @@ than blockers.
   Ollama service to exercise it.
 
 **Next:** Day 11-12, a Streamlit UI on top of this API.
+
+---
+
+### 2026-08-15 — Day 11
+
+**Did:**
+- Refactored `build_index.py` to expose `index_pdf()` and `get_collection()`, so one
+  code path handles both the batch build and runtime uploads. Verified the refactor
+  produced the same 303 chunks.
+- Wrote `app.py`: Streamlit UI with a question box, the answer, and each source in an
+  expander showing the paper title, page, and the exact chunk text the model saw.
+- Sidebar lists indexed documents and takes a PDF upload.
+- Decided the UI imports the pipeline directly instead of calling the FastAPI service.
+
+**Broke / got stuck on:**
+- Nothing broke. Two things needed care:
+  - Streamlit re-runs the entire script on every interaction, so building the retriever
+    inline would rebuild the corpus and BM25 statistics constantly. Wrapped in
+    `st.cache_resource`, and the cache is cleared after an upload.
+  - Uploading a file already indexed would have duplicated its chunks. `index_pdf()`
+    now deletes existing chunks for that filename first. Verified by re-indexing a
+    file: count stayed at 303, 43 unique ids.
+
+**Learned:**
+- Direct import vs calling your own API is a real architectural choice, not a detail.
+  Direct import means one process, which is what a single-process host like Hugging Face
+  Spaces wants. Calling the API would keep layers separate and prove the API works for a
+  real client, at the cost of running two services. Chose simplicity for deployment and
+  kept `api.py` as the programmatic interface.
+- Sharing `index_pdf()` between the batch script and the upload handler means an
+  uploaded PDF gets the same LaTeX stripping, hyphenation repair, title prefixing and
+  chunking as a pre-indexed one. Two code paths would have drifted.
+- Caching decisions follow from the framework's execution model. Streamlit reruns
+  top-to-bottom; FastAPI holds state across requests. Same underlying problem —
+  expensive setup — with a different solution in each.
+
+**Still don't fully get:**
+- The scanned-PDF upload path is written but untested, having no scan to try.
+
+**Next:** Day 13-14 evaluation with real retrieval numbers, then deployment.

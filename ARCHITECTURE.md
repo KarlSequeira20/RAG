@@ -105,10 +105,15 @@ Update a section whenever you make or change a real design decision. Leave "why"
   is holding, not just appearing to.
 
 ## Source Citation
-- **How citations are tracked (page/chunk metadata approach):** Not built yet (Day 5-7).
-  `PyPDFLoader` already attaches per-page metadata we can carry through:
-  `source` (full file path), `page` (0-indexed int), `page_label` (printed page number,
-  as a string), `total_pages`.
+- **How citations are tracked (page/chunk metadata approach):** Built. `PyPDFLoader`
+  attaches per-page metadata; chunking never merges across pages, so every chunk keeps
+  the page it came from. `build_index.clean_metadata()` stores `source` (bare filename),
+  `title`, `page` (0-indexed) and `page_label` (printed number) on each chunk.
+  Retrieved chunks are numbered `[1]`, `[2]`... in the prompt with their title and page,
+  the model is told to cite by number, and every surface — CLI, API, UI — shows the same
+  numbering alongside the chunk text so a reader can check the citation directly.
+- **Displayed page number:** `page_label`, the number printed on the page, because that
+  is what a reader looking at the PDF will see.
 - **Known issues (e.g. hallucinated citations, mismatches):**
   - `page` and `page_label` differ by one. Page one of a PDF is `page: 0` /
     `page_label: '1'`. Mixing them up gives citations that are silently off by one.
@@ -162,6 +167,24 @@ Update a section whenever you make or change a real design decision. Leave "why"
   the original PDFs.
 - **Not yet measured:** retrieval precision/recall as numbers rather than per-question
   verdicts. Day 13.
+
+## Frontend
+- **Run with:** `./.venv/bin/streamlit run app.py`
+- **Built with:** Streamlit (`app.py`) — question box, answer, and every source in an
+  expander showing the paper title and the exact chunk text the model was given.
+  Sidebar lists the indexed documents and allows uploading a new PDF.
+- **Imports the pipeline directly rather than calling the FastAPI service.** One process,
+  no network hop, which is what Hugging Face Spaces expects. `api.py` stays as the
+  programmatic interface; it is not what the UI talks to.
+- **Retriever is cached with `st.cache_resource`.** Streamlit re-runs the whole script on
+  every interaction, so without caching the corpus and BM25 statistics would be rebuilt
+  on each rerun. The cache is explicitly cleared after an upload, since the corpus changed.
+- **Upload handling:** `build_index.index_pdf()` is shared between the batch build and the
+  upload handler, so a runtime upload is processed identically to a pre-indexed file.
+  Re-indexing the same filename deletes its existing chunks first — verified: re-indexing
+  a file left the count at 303 with 43 unique ids, no duplicates.
+- **Untested:** uploading an actual scanned PDF. The handler reports 0 chunks and explains
+  that OCR would be needed, but has not been exercised against a real scan.
 
 ## Deployment
 - **Platform:**

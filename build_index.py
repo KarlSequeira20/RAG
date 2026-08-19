@@ -74,6 +74,41 @@ def clean_metadata(metadata, filename, title):
     }
 
 
+def index_pdf(collection, path):
+    """Chunk, embed and store one PDF. Returns (chunks added, blank pages).
+
+    Shared by the batch build below and by the Streamlit upload handler, so a file
+    uploaded at runtime is processed exactly like one indexed ahead of time.
+    Re-indexing the same filename replaces its chunks rather than duplicating them.
+    """
+    pages = load_pdf(path)
+    title = get_title(path, pages)
+    chunks = chunk_pages(pages)
+    blank_pages = sum(1 for p in pages if not p.page_content.strip())
+
+    if not chunks:
+        return 0, blank_pages
+
+    existing = collection.get(where={"source": path.name}, include=[])["ids"]
+    if existing:
+        collection.delete(ids=existing)
+
+    texts = [c.page_content for c in chunks]
+    collection.add(
+        ids=[f"{path.name}:{i}" for i in range(len(chunks))],
+        documents=texts,
+        embeddings=embed_texts([contextualise(x, title) for x in texts]),
+        metadatas=[clean_metadata(c.metadata, path.name, title) for c in chunks],
+    )
+    return len(chunks), blank_pages
+
+
+def get_collection():
+    """Open the persistent collection, creating it if this is a first run."""
+    client = chromadb.PersistentClient(path=str(CHROMA_DIR))
+    return client.get_or_create_collection(COLLECTION_NAME)
+
+
 def main():
     client = chromadb.PersistentClient(path=str(CHROMA_DIR))
 
@@ -85,25 +120,11 @@ def main():
     total_chunks = 0
 
     for path in sorted(DATA_DIR.glob("*.pdf")):
-        pages = load_pdf(path)
-        title = get_title(path, pages)
-        chunks = chunk_pages(pages)
-
-        texts = [c.page_content for c in chunks]
-        metadatas = [clean_metadata(c.metadata, path.name, title) for c in chunks]
-        ids = [f"{path.name}:{i}" for i in range(len(chunks))]
-
-        print(f"{path.name}: {len(pages)} pages -> {len(chunks)} chunks, embedding...")
-        # Embed the title-prefixed text, but store the original text unchanged.
-        embeddings = embed_texts([contextualise(t, title) for t in texts])
-
-        collection.add(
-            ids=ids,
-            documents=texts,
-            embeddings=embeddings,
-            metadatas=metadatas,
-        )
-        total_chunks += len(chunks)
+        print(f"{path.name}: embedding...")
+        added, blanks = index_pdf(collection, path)
+        note = f", {blanks} blank pages" if blanks else ""
+        print(f"{path.name}: {added} chunks{note}")
+        total_chunks += added
 
     print(f"\nStored {total_chunks} chunks in {CHROMA_DIR}")
     print(f"Collection '{COLLECTION_NAME}' now holds {collection.count()} items.")
