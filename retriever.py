@@ -43,6 +43,17 @@ RERANK_MODEL = "ms-marco-MiniLM-L-12-v2"
 # ranked highly. That gap is exactly what reranking is for.
 RERANK_CANDIDATES = 20
 
+# Chunks scoring below this after reranking are dropped rather than sent to the model.
+# Measured across a mixed corpus (floorplan papers, a Wikipedia article, a travel site):
+# genuinely relevant chunks score 0.85-1.00 and irrelevant ones score exactly 0.0000 --
+# the cross-encoder is decisive about irrelevance, so the gap is enormous and the exact
+# cutoff barely matters. 0.05 sits far below any observed real hit.
+#
+# This matters most on a mixed corpus. Retrieval always returns k results whether or not
+# anything is relevant, so without a floor a question about one topic arrives at the
+# model padded with confidently-irrelevant chunks from another.
+MIN_RELEVANCE = 0.05
+
 
 def tokenize(text):
     """Split into lowercase word tokens for keyword matching.
@@ -97,7 +108,7 @@ class HybridRetriever:
         ranked = self._ranker.rerank(request)
         return [(item["id"], item["score"]) for item in ranked[:k]]
 
-    def search(self, question, k=4, depth=30, rerank=True):
+    def search(self, question, k=4, depth=30, rerank=True, sources=None):
         """Merge both rankings with Reciprocal Rank Fusion.
 
         Each list votes for a chunk with 1/(RRF_K + rank). A chunk that both methods
@@ -105,6 +116,16 @@ class HybridRetriever:
         exactly the behaviour we want -- it is the disagreements that cause misses.
         """
         rankings = (self.vector_ranking(question, depth), self.keyword_ranking(question, depth))
+
+        # Optional restriction to specific documents. Filtering after ranking (rather
+        # than querying a subset) keeps one code path, at the cost of searching chunks
+        # that will be discarded -- negligible at this scale.
+        if sources is not None:
+            allowed = set(sources)
+            rankings = tuple(
+                [i for i in ranking if self.metadatas[i]["source"] in allowed]
+                for ranking in rankings
+            )
 
         scores = {}
         for ranking in rankings:
@@ -130,5 +151,8 @@ class HybridRetriever:
         candidates = [(i, scores.get(i, 0.0)) for i in chosen[:want]]
         if rerank:
             candidates = self.rerank(question, candidates, k)
+            # Only reranker scores are comparable across questions; RRF scores are not,
+            # so the floor is applied only when reranking actually ran.
+            candidates = [(i, s) for i, s in candidates if s >= MIN_RELEVANCE]
 
         return [(self.documents[i], self.metadatas[i], s) for i, s in candidates[:k]]

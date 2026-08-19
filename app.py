@@ -58,13 +58,23 @@ with st.sidebar:
     for meta in retriever.metadatas:
         sources.setdefault(meta["source"], meta)
 
-    st.write(f"**{len(retriever.documents)} chunks** from {len(sources)} document(s):")
-    for source, meta in sorted(sources.items(), key=lambda kv: kv[1]["title"].lower()):
-        chunks = sum(1 for m in retriever.metadatas if m["source"] == source)
-        if meta.get("kind") == "web":
-            st.markdown(f"- [{meta['title']}]({source}) · {chunks} chunks")
-        else:
-            st.markdown(f"- **{meta['title'][:60]}**  \n  `{source}` · {chunks} chunks")
+    st.write(f"**{len(retriever.documents)} chunks** from {len(sources)} document(s)")
+
+    # Restricting the search matters on a mixed corpus: with papers, an encyclopedia
+    # article and a company site in one index, a vague question can pull from a topic
+    # the asker did not mean. The relevance threshold handles clear-cut cases
+    # automatically; this covers the ambiguous ones the reranker cannot resolve.
+    labels = {
+        source: f"{meta['title'][:45]}{'...' if len(meta['title']) > 45 else ''}"
+        for source, meta in sources.items()
+    }
+    selected = st.multiselect(
+        "Search in",
+        options=sorted(sources, key=lambda s: labels[s].lower()),
+        default=sorted(sources),
+        format_func=lambda s: labels[s],
+        help="Leave all selected to search everything.",
+    )
 
     st.divider()
     uploaded = st.file_uploader("Add a PDF", type="pdf")
@@ -111,7 +121,11 @@ question = st.text_input(
 if question.strip():
     try:
         with st.spinner("Retrieving and answering..."):
-            text, hits = answer(question.strip(), retriever=load_retriever())
+            text, hits = answer(
+                question.strip(),
+                retriever=load_retriever(),
+                sources=selected if selected else None,
+            )
     except Exception as exc:
         st.error(
             f"Could not reach the language model ({type(exc).__name__}). "
@@ -120,6 +134,13 @@ if question.strip():
     else:
         st.markdown("### Answer")
         st.write(text)
+
+        if not hits:
+            st.info(
+                "Nothing in the indexed documents was relevant enough to answer this, "
+                "so the language model was not called."
+            )
+            st.stop()
 
         st.markdown("### Sources")
         st.caption(

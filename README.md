@@ -128,6 +128,13 @@ A chunk from the middle of a paper says "our dataset" and never names it, so not
 its embedding ties it to its source. Prefixing each chunk with its paper title before
 embedding took `doc@k` to 100% at every k.
 
+**A relevance threshold, made possible by the reranker.**
+Reranker scores are comparable across questions in a way cosine distances are not.
+Measured on a deliberately mixed corpus: relevant chunks score 0.85-1.00, irrelevant ones
+score **exactly 0.0000**. Chunks below 0.05 are dropped, and if nothing survives the
+model is never called — an out-of-scope question is answered in 1.0s instead of ~6s, with
+no opportunity to hallucinate. Retrieval metrics were unchanged.
+
 **An explicit refusal string.**
 The prompt gives the model a sanctioned way to decline. Without one, a model strains to
 answer from training data rather than admit the text isn't there.
@@ -185,8 +192,7 @@ Kept deliberately, and each one diagnosed:
   failing silently. A headless browser would fix it.
 - **hit@k is slightly optimistic.** Ground truth is labelled per page, and a page holds
   several chunks.
-- **No chunk cap per URL.** Nothing stops one large site adding thousands of chunks and
-  crowding out the papers.
+- **No chunk cap per URL.** Nothing stops one large site adding thousands of chunks.
 - **No tests yet.** The most conspicuous gap.
 
 ---
@@ -272,9 +278,7 @@ Any web page can be indexed alongside them from the UI.
 1. **Tests** — `clean_text`, `tokenize` and the re-indexing dedup logic are pure
    functions with clear inputs and outputs. A silent bug in exactly that code cost a
    quarter of the index once.
-2. **A confidence threshold on reranker scores** — relevant chunks score ~0.99 and junk
-   near 0, so an out-of-scope question could skip the language model entirely.
-3. **Query expansion for "why" questions** — search for the problem a mechanism solves,
+2. **Query expansion for "why" questions** — search for the problem a mechanism solves,
    not only the mechanism's name.
 4. **A larger model** — retrieval is at 100% hit@6, so every remaining failure is the
    model misreading text it was correctly given.

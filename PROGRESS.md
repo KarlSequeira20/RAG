@@ -514,3 +514,40 @@ than blockers.
   nothing prevents one URL from adding thousands.
 
 **Next:** tests, then README and demo video.
+
+---
+
+### 2026-08-15 — Day 13 (mixed-corpus safety)
+
+**Did:**
+- Measured reranker scores across a mixed corpus before choosing anything.
+- Added a relevance threshold at 0.05: chunks below it are dropped, and if nothing
+  survives the model is not called at all.
+- Added optional source filtering (`search(..., sources=[...])`), surfaced as a
+  "Search in" multiselect in the UI.
+- Confirmed retrieval metrics are unchanged (hit@6 100%, MRR 0.783).
+
+**Broke / got stuck on:**
+- Nothing broke. One edit put a comment in the wrong place, splitting an existing comment
+  block in two — noticed on reading the file back rather than from any error.
+
+**Learned:**
+- Reranker scores are usable as an absolute signal, which cosine distances and RRF scores
+  are not. Distances only mean something relative to each other within one query; the
+  cross-encoder outputs a genuine relevance judgement, so a fixed cutoff works across
+  questions.
+- The measurement made the decision trivial. Relevant 0.85-1.00, irrelevant exactly
+  0.0000 — with a gap that size, the threshold's precise value is irrelevant. Had the
+  distributions overlapped, this would have been a real tuning problem.
+- Not calling the model is a feature, not an optimisation. With no relevant text in the
+  prompt, asking a model to answer only invites it to fall back on training data. Zero
+  chunks means the honest response is available without any risk.
+- Automatic and manual controls solve different halves. The threshold handles clear-cut
+  irrelevance; filtering handles ambiguity the reranker cannot resolve, where a question
+  genuinely matches a topic the asker did not mean.
+
+**Still don't fully get:**
+- Whether 0.05 holds up on a corpus where topics genuinely overlap. Everything measured
+  here was either clearly relevant or clearly not.
+
+**Next:** tests, then the demo video.

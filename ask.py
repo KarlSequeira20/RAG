@@ -16,6 +16,10 @@ LLM_MODEL = "llama3.1:8b"
 # correct chunk is often present but a place or two lower than a neighbouring one.
 TOP_K = 6
 
+# Returned without calling the model when nothing relevant was retrieved. Kept identical
+# to the refusal string in the prompt so callers see one consistent answer either way.
+NO_ANSWER = "That isn't covered in these documents."
+
 # The instruction that keeps answers grounded. Two things matter here:
 # the model is told to use only the supplied context, and it is given an
 # explicit way out. Without that escape hatch a model will strain to produce
@@ -64,9 +68,16 @@ def build_prompt(question, hits):
     return f"Sources:\n\n{context}\n\nQuestion: {question}"
 
 
-def answer(question, retriever=None):
+def answer(question, retriever=None, sources=None):
+    """Answer a question. `sources` optionally restricts which documents to search."""
     retriever = retriever or HybridRetriever()
-    hits = retriever.search(question, k=TOP_K)
+    hits = retriever.search(question, k=TOP_K, sources=sources)
+
+    # Nothing cleared the relevance floor, so there is nothing to answer from. Skipping
+    # the model here is both faster and safer -- with no relevant text in the prompt,
+    # asking it to answer only invites it to fall back on training data.
+    if not hits:
+        return NO_ANSWER, []
 
     response = ollama.chat(
         model=LLM_MODEL,
@@ -88,6 +99,9 @@ def main():
 
     print(f"\nQ: {question}\n")
     print(text)
+    if not hits:
+        print("\n(No chunk cleared the relevance threshold, so the model was not called.)")
+        return
     print("\nSources retrieved:")
     for i, (_text, meta, score) in enumerate(hits, start=1):
         print(f"  [{i}] {describe_location(meta)}  (score {score:.4f})")

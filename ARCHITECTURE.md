@@ -120,6 +120,27 @@ Update a section whenever you make or change a real design decision. Leave "why"
     FloorPlanCAD?") returns the correct authors and affiliations — the failure previously
     recorded as structural and needing a metadata lookup. D12 now gives the full answer
     (density map of the input point cloud) rather than just "density image".
+- **Relevance threshold (added Day 13):** chunks scoring below 0.05 after reranking are
+  dropped instead of being sent to the model, and if nothing survives the model is not
+  called at all — the refusal is returned directly.
+  - **Why a threshold is now possible:** reranker scores are comparable across questions
+    in a way RRF scores and cosine distances are not. Measured across a deliberately
+    mixed corpus (floorplan papers, a Wikipedia article, a travel company page): relevant
+    chunks score 0.85-1.00, irrelevant chunks score **exactly 0.0000**. The cross-encoder
+    is decisive about irrelevance, so the gap is enormous and the exact cutoff barely
+    matters.
+  - **Why it matters:** retrieval always returns k results whether or not anything is
+    relevant. On a single-topic corpus that is harmless; on a mixed one it means a
+    question about one subject arrives at the model padded with confidently-irrelevant
+    chunks from another.
+  - **Effect:** "What is the best pizza topping?" now returns 0 chunks and answers in
+    1.0s without calling the model, versus ~6s. No model call means no possibility of
+    hallucination on out-of-scope questions.
+  - **No cost:** retrieval metrics were identical before and after (hit@6 100%, MRR 0.783).
+- **Source filtering:** `search(..., sources=[...])` restricts which documents are
+  searched, exposed as a "Search in" multiselect in the UI. The threshold handles clear-cut
+  irrelevance automatically; this covers ambiguous questions the reranker cannot resolve —
+  a vague query on a mixed corpus that legitimately matches the wrong topic.
 - **Top-k value used:** 6 (was 4 with pure vector search)
 - **Why:** Enough that an answer needing facts from two different pages can still be
   assembled, without padding the prompt with mostly-irrelevant text. Not tuned yet —
