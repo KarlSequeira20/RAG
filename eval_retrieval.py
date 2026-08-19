@@ -61,13 +61,13 @@ GROUND_TRUTH = [
 K_VALUES = (1, 3, 6, 10)
 
 
-def evaluate(retriever, k):
+def evaluate(retriever, k, rerank=True):
     hits = docs = 0
     reciprocal_ranks = []
     misses = []
 
     for qid, question, want_file, want_pages in GROUND_TRUTH:
-        results = retriever.search(question, k=k)
+        results = retriever.search(question, k=k, rerank=rerank)
 
         rank_of_hit = None
         found_doc = False
@@ -97,12 +97,15 @@ def main():
     retriever = HybridRetriever()
     print(f"{len(GROUND_TRUTH)} questions with labelled ground truth "
           f"(E14/E15 excluded -- nothing to retrieve)\n")
-    print(f"{'k':>3}  {'hit@k':>7}  {'doc@k':>7}  {'MRR':>6}   misses")
-    print("-" * 58)
-    for k in K_VALUES:
-        r = evaluate(retriever, k)
-        print(f"{r['k']:>3}  {r['hit']:>6.0%}  {r['doc']:>7.0%}  {r['mrr']:>6.3f}   "
-              f"{', '.join(r['misses']) or '-'}")
+    for rerank in (False, True):
+        print(f"--- {'hybrid + cross-encoder rerank' if rerank else 'hybrid only'} ---")
+        print(f"{'k':>3}  {'hit@k':>7}  {'doc@k':>7}  {'MRR':>6}   misses")
+        print("-" * 58)
+        for k in K_VALUES:
+            r = evaluate(retriever, k, rerank=rerank)
+            print(f"{r['k']:>3}  {r['hit']:>6.0%}  {r['doc']:>7.0%}  {r['mrr']:>6.3f}   "
+                  f"{', '.join(r['misses']) or '-'}")
+        print()
 
 
 if __name__ == "__main__":

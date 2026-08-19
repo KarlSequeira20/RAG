@@ -15,6 +15,7 @@ import re
 
 import chromadb
 import ollama
+from flashrank import Ranker, RerankRequest
 from rank_bm25 import BM25Okapi
 
 from build_index import CHROMA_DIR, COLLECTION_NAME, EMBED_MODEL
@@ -29,6 +30,18 @@ RRF_K = 60
 # it beneath chunks both methods rank moderately. Reserving a couple of slots for each
 # method's own top hits keeps a confident single-source result from being out-voted.
 RESERVED_PER_METHOD = 2
+
+# Reranking model. A cross-encoder: unlike the embedding model, which encodes the
+# question and a chunk separately into fixed vectors, this reads the question and one
+# chunk *together* and scores how well that chunk answers that question. Much more
+# accurate, and far too slow to run over the whole corpus -- so retrieval narrows the
+# field to a handful of candidates first and this only reorders those.
+RERANK_MODEL = "ms-marco-MiniLM-L-12-v2"
+
+# How many candidates to hand the reranker. Measured: hit@10 is 100% while hit@6 is 94%,
+# so the correct chunk is nearly always inside the first 10-20 candidates but not always
+# ranked highly. That gap is exactly what reranking is for.
+RERANK_CANDIDATES = 20
 
 
 def tokenize(text):
@@ -56,6 +69,7 @@ class HybridRetriever:
         self.metadatas = data["metadatas"]
         self.position_of = {chunk_id: i for i, chunk_id in enumerate(self.ids)}
         self.bm25 = BM25Okapi([tokenize(d) for d in self.documents])
+        self._ranker = None  # loaded on first rerank, not on construction
 
     def vector_ranking(self, question, depth):
         """Indices of the chunks closest in meaning, best first."""
@@ -71,7 +85,19 @@ class HybridRetriever:
         ranked = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
         return [i for i in ranked[:depth] if scores[i] > 0]
 
-    def search(self, question, k=4, depth=30):
+    def rerank(self, question, candidates, k):
+        """Rescore candidates with the cross-encoder and keep the best k."""
+        if self._ranker is None:
+            self._ranker = Ranker(model_name=RERANK_MODEL)
+
+        request = RerankRequest(
+            query=question,
+            passages=[{"id": idx, "text": self.documents[idx]} for idx, _score in candidates],
+        )
+        ranked = self._ranker.rerank(request)
+        return [(item["id"], item["score"]) for item in ranked[:k]]
+
+    def search(self, question, k=4, depth=30, rerank=True):
         """Merge both rankings with Reciprocal Rank Fusion.
 
         Each list votes for a chunk with 1/(RRF_K + rank). A chunk that both methods
@@ -86,6 +112,9 @@ class HybridRetriever:
                 scores[idx] = scores.get(idx, 0) + 1 / (RRF_K + rank)
 
         # Each method's own top picks go in first, then RRF fills the rest.
+        # When reranking, gather a wider candidate pool -- the cross-encoder decides the
+        # final order, so the job here is recall, not precision.
+        want = RERANK_CANDIDATES if rerank else k
         chosen = []
         for ranking in rankings:
             for idx in ranking[:RESERVED_PER_METHOD]:
@@ -93,9 +122,13 @@ class HybridRetriever:
                     chosen.append(idx)
 
         for idx in sorted(scores, key=lambda i: scores[i], reverse=True):
-            if len(chosen) >= k:
+            if len(chosen) >= want:
                 break
             if idx not in chosen:
                 chosen.append(idx)
 
-        return [(self.documents[i], self.metadatas[i], scores[i]) for i in chosen[:k]]
+        candidates = [(i, scores.get(i, 0.0)) for i in chosen[:want]]
+        if rerank:
+            candidates = self.rerank(question, candidates, k)
+
+        return [(self.documents[i], self.metadatas[i], s) for i, s in candidates[:k]]

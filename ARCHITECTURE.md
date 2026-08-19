@@ -69,6 +69,32 @@ Update a section whenever you make or change a real design decision. Leave "why"
   RRF fills the rest.
 - **Also needed, to make keyword search work at all:** title prefixing at embed time and
   hyphenation repair — see Chunking and Open Questions.
+- **Reranking (added Day 13):** hybrid search now returns 20 candidates, and a
+  cross-encoder rescores them down to the final 6.
+  - **Why a cross-encoder:** the embedding model is a *bi-encoder* — question and chunk
+    are encoded separately into fixed vectors and then compared, so the model never sees
+    the two together. A cross-encoder reads question and chunk jointly and scores how
+    well that chunk answers that question. Much more accurate, and far too slow to run
+    over the whole corpus, which is why it only reorders candidates retrieval has already
+    narrowed down.
+  - **Why it was the right next step:** measured, not guessed. hit@10 was 100% while
+    hit@6 was 94% and MRR 0.677 — the correct chunk was nearly always being found but not
+    ranked highly. That gap is exactly what reranking addresses.
+  - **Model:** `ms-marco-MiniLM-L-12-v2` via flashrank — 21.6 MB, runs on onnxruntime,
+    no PyTorch. Chosen to keep the stack local and light.
+  - **Measured effect:**
+
+    | metric | hybrid only | + reranker |
+    |---|---|---|
+    | hit@1 | 50% | 62% |
+    | hit@3 | 81% | 94% |
+    | **hit@6** | 94% | **100%** |
+    | MRR | 0.677 | **0.783** |
+
+  - **End to end:** two previously-broken questions now pass. D13 ("Who made
+    FloorPlanCAD?") returns the correct authors and affiliations — the failure previously
+    recorded as structural and needing a metadata lookup. D12 now gives the full answer
+    (density map of the input point cloud) rather than just "density image".
 - **Top-k value used:** 6 (was 4 with pure vector search)
 - **Why:** Enough that an answer needing facts from two different pages can still be
   assembled, without padding the prompt with mostly-irrelevant text. Not tuned yet —
@@ -231,9 +257,15 @@ Update a section whenever you make or change a real design decision. Leave "why"
   RoomFormer use two-level queries?": the chunk stating the real reason (a floorplan has
   a variable number of rooms, each with a variable number of corners) ranks keyword #9
   and vector #27, outside the top 6 for both, so hybrid retrieval does not rescue it.
-  This is not a tuning problem — it is how papers are written. Possible directions:
-  query expansion toward the problem a mechanism solves, or weighting abstract and
-  introduction chunks higher for "why" questions. Not attempted yet.
+  **Update (Day 13):** reranking fixed the retrieval half — the page-2 chunk stating the
+  real reason now reaches the prompt at position 5, and hit@6 is 100%. Generation still
+  answers from the page-8 ablation text instead. So this is no longer a retrieval failure
+  but a generation one: the model prefers text that repeats the question's vocabulary over
+  text that answers it.
+- **C9 regressed when reranking was added.** It now lists the third FloorPlanCAD
+  contribution as "fine-grained annotations for 35 object categories" instead of the
+  CNN-GCN baseline. Better retrieval, worse answer — the reranker changed which chunks
+  reach the prompt, and the model picked wrongly among them.
 - **Generation is now the weak link, not retrieval.** On "How many floor plans are in
   the FloorPlanCAD dataset?", the correct chunk *is* retrieved as source [4] and reads
   "containing over 15,000 floor plans, ranging from residential to commercial

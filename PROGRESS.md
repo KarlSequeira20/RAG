@@ -435,3 +435,42 @@ than blockers.
   is given. More context could easily make answers worse.
 
 **Next:** README and demo video.
+
+---
+
+### 2026-08-15 — Day 13 (later)
+
+**Did:**
+- Added a cross-encoder reranker: hybrid search now returns 20 candidates and
+  `ms-marco-MiniLM-L-12-v2` (via flashrank, 21.6 MB, onnxruntime, no PyTorch) rescores
+  them down to 6.
+- Measured retrieval with and without it, and re-ran the full answer eval.
+
+**Broke / got stuck on:**
+- C9 regressed. It now gives the third FloorPlanCAD contribution as "fine-grained
+  annotations for 35 object categories" instead of the CNN-GCN baseline. Retrieval got
+  better and that answer got worse.
+
+**Learned:**
+- The reranker was chosen from measurements, not from a tutorial. hit@10 was already
+  100% while hit@6 was 94% and MRR 0.677 — meaning the right chunk was nearly always
+  found but not ranked high enough to reach the prompt. That specific gap is what
+  reranking fixes, and it did: hit@6 100%, MRR 0.783.
+- Bi-encoder vs cross-encoder is the whole idea. Embeddings encode question and chunk
+  separately so they can be precomputed, which is what makes search fast and also what
+  limits it — the model never sees the pair together. A cross-encoder does, and is far
+  too slow to run over everything, so it only reorders what retrieval already narrowed.
+- Fixing retrieval fixed two failures I had written off. D13 was recorded as structural,
+  needing a metadata lookup; the reranker simply found the affiliation chunk. Worth
+  re-testing old conclusions after a change rather than trusting the note.
+- Improving one stage can degrade another. C9 got worse because different chunks now
+  reach the prompt. A single overall score would have hidden that.
+- F16 changed category rather than being fixed. The chunk with the real reason now
+  reaches the prompt at position 5, but the model still answers from the ablation text.
+  It was a retrieval failure; it is now a generation failure.
+
+**Still don't fully get:**
+- Why the model prefers ablation text over the sentence that actually answers "why". It
+  has both in front of it. Possibly the ablation text repeats the question's wording more.
+
+**Next:** tests, then README and demo video.

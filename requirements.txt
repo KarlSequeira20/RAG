@@ -5,6 +5,7 @@ chromadb
 pypdf
 ollama
 rank_bm25
+flashrank
 fastapi
 uvicorn
 streamlit

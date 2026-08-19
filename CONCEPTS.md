@@ -111,6 +111,21 @@ Small k risks missing the chunk that held the answer. Large k pads the prompt wi
 irrelevant text, which costs money/time and can distract the model. Something to tune
 with real evaluation numbers rather than guesswork.
 
+### Reranking
+Retrieval has to be fast, because it compares against every chunk you have. That speed
+comes from a **bi-encoder**: the question and each chunk are turned into vectors
+*separately*, then compared. The model never sees a question and a chunk side by side, so
+it cannot notice that one specifically answers the other.
+
+A **cross-encoder** does see them together — it takes the question and one chunk as a
+single input and outputs a relevance score. Much more accurate, and far too slow to run
+over a whole corpus.
+
+So you use both: fast retrieval narrows thousands of chunks to ~20 candidates, then the
+cross-encoder rescores just those and keeps the best handful. This is standard in
+production RAG, and the measurable sign you need it is a gap between hit@10 and hit@6 —
+the right chunk is being found, just not ranked highly enough to reach the prompt.
+
 ### Generation
 Putting the retrieved chunks and the question into a prompt and asking the LLM to
 answer. The key instruction is *answer only from the provided text, and say you don't
@@ -135,6 +150,8 @@ sometimes make things up.
 | **Ollama** | Runs LLMs locally on your own machine | No API key, no per-token cost, data never leaves the laptop |
 | **`nomic-embed-text`** | The embedding model, via Ollama, 768 dimensions | Turns text into meaning-vectors |
 | **Chroma** | Vector database, runs in-process, saves to a local folder | Stores and searches the vectors; nothing to deploy or operate |
+| **BM25** (`rank_bm25`) | Classic keyword search — scores exact word overlap | Finds proper nouns and numbers, which embeddings compress away |
+| **flashrank** | Cross-encoder reranker, 21.6 MB, runs on onnxruntime | Rescores the top candidates jointly against the question; no PyTorch needed |
 | **FastAPI** *(Week 2)* | Turns Python functions into a web API | Lets a frontend — or anyone — call the pipeline over HTTP |
 | **Streamlit** *(Week 2)* | Builds a simple web UI from a Python script | A usable interface without writing frontend code |
 
@@ -190,7 +207,10 @@ I check where the known-correct chunk actually ranked, because rank #11 and rank
 different bugs with different fixes.
 
 Retrieval is also scored on its own, against questions labelled with the document and page
-holding the answer: hit@6 is 94%, doc@k is 100% at every k, MRR 0.677, and hit@10 is 100%.
+holding the answer: hit@6 100%, doc@k 100% at every k, MRR 0.783. Before adding a
+cross-encoder reranker those were 94% and 0.677 — the reranker was chosen because hit@10
+was already 100% while hit@6 was not, which says the right chunk was being found but not
+ranked highly.
 Measuring retrieval separately matters because generation can only be as good as what
 reaches it — hit@10 being 100% says every answer is reachable and the remaining problem is
 ranking, not coverage.
