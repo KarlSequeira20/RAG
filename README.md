@@ -5,6 +5,11 @@ comes **only** from those documents, with the exact source text shown next to it
 
 Runs entirely locally — no API keys, no cloud, no per-query cost.
 
+![The app answering a question, with source [1] expanded to show the exact text the model was given](docs/screenshot-answer.png)
+
+The answer says 5,000 — and the expanded source shows the paragraph it came from, so the
+claim is checkable rather than trusted.
+
 ```
 $ python ask.py "How many floor plans are in the FloorPlanCAD dataset?"
 
@@ -31,8 +36,12 @@ $ python ask.py "What is the architecture of the BERT language model?"
 That isn't covered in these documents.
 ```
 
+![The app refusing a question the documents do not cover](docs/screenshot-refusal.png)
+
 That second behaviour is the point of the project. The model *knows* what BERT is —
-refusing proves it is answering from the documents rather than from memory.
+refusing proves it is answering from the documents rather than from memory. In this case
+the model was never called at all: nothing cleared the relevance threshold, so there was
+nothing to answer from.
 
 ---
 
@@ -268,6 +277,7 @@ pytest
 | `run_eval.py` | End-to-end answer evaluation |
 | `chunk_test.py` | The chunk-size experiment used to pick 1000/100 |
 | `tests/` | 38 tests, mostly regression tests for the bugs listed above |
+| `tools/capture_screenshots.py` | Regenerates the README screenshots via a headless browser |
 
 ---
 

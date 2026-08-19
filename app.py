@@ -60,21 +60,34 @@ with st.sidebar:
 
     st.write(f"**{len(retriever.documents)} chunks** from {len(sources)} document(s)")
 
-    # Restricting the search matters on a mixed corpus: with papers, an encyclopedia
-    # article and a company site in one index, a vague question can pull from a topic
-    # the asker did not mean. The relevance threshold handles clear-cut cases
-    # automatically; this covers the ambiguous ones the reranker cannot resolve.
     labels = {
         source: f"{meta['title'][:45]}{'...' if len(meta['title']) > 45 else ''}"
         for source, meta in sources.items()
     }
-    selected = st.multiselect(
-        "Search in",
-        options=sorted(sources, key=lambda s: labels[s].lower()),
-        default=sorted(sources),
-        format_func=lambda s: labels[s],
-        help="Leave all selected to search everything.",
-    )
+    for source in sorted(sources, key=lambda s: labels[s].lower()):
+        meta = sources[source]
+        count = sum(1 for m in retriever.metadatas if m["source"] == source)
+        if meta.get("kind") == "web":
+            st.markdown(f"- [{labels[source]}]({source}) · {count} chunks")
+        else:
+            st.markdown(f"- {labels[source]} · {count} chunks")
+
+    # Restricting the search matters on a mixed corpus: with papers, an encyclopedia
+    # article and a company site in one index, a vague question can pull from a topic
+    # the asker did not mean. The relevance threshold handles clear-cut cases
+    # automatically; this covers the ambiguous ones the reranker cannot resolve.
+    #
+    # Collapsed by default: it is an occasional control, and rendering every document as
+    # a selected chip filled the sidebar and read as an error state.
+    with st.expander("Search only in specific documents"):
+        selected = st.multiselect(
+            "Documents",
+            options=sorted(sources, key=lambda s: labels[s].lower()),
+            default=[],
+            format_func=lambda s: labels[s],
+            label_visibility="collapsed",
+            help="Leave empty to search everything.",
+        )
 
     st.divider()
     uploaded = st.file_uploader("Add a PDF", type="pdf")
